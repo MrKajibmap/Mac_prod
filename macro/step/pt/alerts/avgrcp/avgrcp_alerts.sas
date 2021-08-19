@@ -42,17 +42,17 @@ proc fedsql sessref=casauto;
 		, cast(pmix.location as integer) as LOCATION /*– ИД ресторана*/
 		, pmix.data as DATA /*– Дата прогноза или факта (месяц)*/
 		
-		, pmix.TOTAL_FCST_QNT_MON
-		, pmix.TOTAL_FCST_RUR_MON
-		, gc.BASE_FORECAST_GC_M
+		, pmix.OVERRIDED_FCST_UNITS
+		, pmix.OVERRIDED_FCST_SALE
+		, gc.OVERRIDED_FCST_GC
 		
 		, case 
-			when abs(gc.BASE_FORECAST_GC_M) > 1e-5 
-				and abs(pmix.TOTAL_FCST_QNT_MON) > 1e-5 
-			then pmix.TOTAL_FCST_QNT_MON / gc.BASE_FORECAST_GC_M * 1000 
+			when abs(gc.OVERRIDED_FCST_GC) > 1e-5 
+				and abs(pmix.OVERRIDED_FCST_UNITS) > 1e-5 
+			then pmix.OVERRIDED_FCST_UNITS / gc.OVERRIDED_FCST_GC * 1000 
 			else 0
 			end
-		  as AVGRCP 
+		  as UPT 
 		
 	from MN_SHORT.PLAN_PMIX_MONTH as pmix 
 	left join MN_SHORT.PLAN_GC_MONTH as gc

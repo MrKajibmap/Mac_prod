@@ -341,5 +341,7 @@
 		droptable casdata="&lmvTabNmUpt._komp" incaslib="&lmvLibrefUpt." quiet;
 	quit;
 	
+	%load_loc_dim;
+	%load_prod_dim;
 	
 %mend dp_load_facts;

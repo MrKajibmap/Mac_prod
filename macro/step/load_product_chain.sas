@@ -1,4 +1,4 @@
-%macro load_product_chain(mpOutput = mn_short.product_chain);
+%macro load_product_chain(mpOutput = mn_dict.product_chain);
 	%tech_cas_session(mpMode = start
 							,mpCasSessNm = casauto
 							,mpAssignFlg= y

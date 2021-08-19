@@ -57,8 +57,8 @@ mpOutTableNm 			имя таблицы, например, AVGRCP_ALERT_YEAR_TREND
 			, loc.&mpLocLvl.
 			, prod.&mpProdLvl.
 			, main.DATA as sales_dt			
-			, sum(main.TOTAL_FCST_RUR_MON	) as sum_predict_rur
-			, avg(main.BASE_FORECAST_GC_M	) as sum_predict_gc
+			, sum(main.OVERRIDED_FCST_SALE	) as sum_predict_rur
+			, avg(main.OVERRIDED_FCST_GC	) as sum_predict_gc
 		from 
 			CASUSER.AVGRCP_FCST_MONTH as main
 		left join casuser.pbo_dictionary as loc

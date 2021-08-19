@@ -31,7 +31,7 @@
     %let lmvDiscountList = ('DISCOUNT', 'TEMP PRICE REDUCTION (DISCOUNT)');
     %let lmvNonProdGiftList = ('NON-PRODUCT GIFT', 'GIFT FOR PURCHASE: NON-PRODUCT');
     %let lmvBogoList = ('BOGO / 1+1', 'N+1', '1+1%', 'BUNDLE');
-    %let lmvEVMSetList = ('EVM/Set', 'EVM / Set');
+    %let lmvEVMSetList = ('EVM/SET', 'EVM / SET');
     %let lmvPairsList = ('PAIRS', 'PAIRS (DIFFERENT CATEGORIES)');
     %let lmvDiscForVolumeList = ('OTHER: DISCOUNT FOR VOLUME', 'DISCOUNT FOR VOLUME');
     %let lmvProductGiftList = ('PRODUCT GIFT', 'GIFT FOR PURCHASE (FOR PRODUCT)', 'GIFT FOR PURCHASE (SAMPLING)', 'GIFT FOR PURCHASE (FOR ORDRES ABOVE X RUB)');
@@ -45,17 +45,42 @@
         caslib _all_ assign;
     %end;
     
-	%if %length(&mpPromoClRk.) > 0 %then %do;
+	proc casutil;
+        droptable casdata="PROMO_FILT_SKU_PBO" incaslib="CASUSER" quiet;
+        droptable casdata="NPPROMOSUP_OUT" incaslib="CASUSER" quiet;
+        droptable casdata="DISCOUNT_OUT" incaslib="CASUSER" quiet;
+        droptable casdata="BOGO_1" incaslib="CASUSER" quiet;
+        droptable casdata="BOGO_2" incaslib="CASUSER" quiet;
+        droptable casdata="BOGO_OUT" incaslib="CASUSER" quiet;
+        droptable casdata="EVM_1" incaslib="CASUSER" quiet;
+        droptable casdata="EVM_2" incaslib="CASUSER" quiet;
+        droptable casdata="EVM_3" incaslib="CASUSER" quiet;
+        droptable casdata="EVM_4" incaslib="CASUSER" quiet;
+        droptable casdata="EVM_5" incaslib="CASUSER" quiet;
+        droptable casdata="EVM_OUT" incaslib="CASUSER" quiet;
+        droptable casdata="PRODGIFT_OUT" incaslib="CASUSER" quiet;
+        droptable casdata="DISCFORVOLUME_OUT" incaslib="CASUSER" quiet;
+        droptable casdata="UNION_MECHANICS" incaslib="CASUSER" quiet;
+        droptable casdata="UNION_MECHANICS_1" incaslib="CASUSER" quiet;
+        droptable casdata="NEWLAUNCH_OUT" incaslib="CASUSER" quiet;
+        droptable casdata="PROMO_REG_MAPPING" incaslib="CASUSER" quiet;
+        droptable casdata="UNION_MECHANICS_2" incaslib="CASUSER" quiet;
+        droptable casdata="UNION_MECHANICS_3" incaslib="CASUSER" quiet;
+        droptable casdata="PRICE_INCREASE_MODIFIED_1" incaslib="CASUSER" quiet;
+        droptable casdata="PRICE_INCREASE_MODIFIED_2" incaslib="CASUSER" quiet;
+        droptable casdata="PROMO_PROD_TABLE_1" incaslib="CASUSER" quiet;
+        droptable casdata="NPPROMOSUP_OUT_1" incaslib="CASUSER" quiet;
+    run;
+	/* %if %length(&mpPromoClRk.) > 0 %then %do;
 		%add_promotool_marks2(
 			mpOutCaslib=casuser,
 			mpPtCaslib=pt,
 			PromoCalculationRk=&mpPromoClRk.
 		);
-		/*reinitialize macrovars for Promo Tool View calculation */
 		%let mpPromoTable         	= CASUSER.PROMO_ENH;
 		%let mpPromoPboTable 	 	= CASUSER.PROMO_PBO_ENH_UNFOLD;
 		%let mpPromoProdTable   	= CASUSER.PROMO_PROD_ENH;
-	%end;
+	%end; */
 		
 	
     proc casutil;  
@@ -587,7 +612,7 @@
         promote casdata="&lmvOutTableName" incaslib="CASUSER" outcaslib="&lmvOutTableCLib";
 		save incaslib="&lmvOutTableCLib." outcaslib="&lmvOutTableCLib." casdata="&lmvOutTableName." casout="&lmvOutTableName..sashdat" replace; 
     run;
-
+/*
 	proc casutil;
         droptable casdata="PROMO_FILT_SKU_PBO" incaslib="CASUSER" quiet;
         droptable casdata="NPPROMOSUP_OUT" incaslib="CASUSER" quiet;
@@ -614,5 +639,5 @@
         droptable casdata="PROMO_PROD_TABLE_1" incaslib="CASUSER" quiet;
         droptable casdata="NPPROMOSUP_OUT_1" incaslib="CASUSER" quiet;
     run;
-
+*/
 %mend price_promo_future;

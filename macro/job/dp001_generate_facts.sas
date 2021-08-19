@@ -21,6 +21,11 @@
 	%tech_open_resource(mpResource=LOAD_COMP_SALE_MONTH_FACT);
 	%tech_open_resource(mpResource=LOAD_COMP_UPT_MONT_FACT);
 	
+	
+	%tech_open_resource(mpResource=LOAD_PRODUCT_DIMENSION);
+	%tech_open_resource(mpResource=LOAD_LOCATION_AGRTYPE_FULL_DIMENSION);
+	
+	
 	%tech_log_event(mpMode=END, mpProcess_Nm=dp_generate_facts);	
 
 %mend dp001_generate_facts;

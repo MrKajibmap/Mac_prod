@@ -75,7 +75,7 @@
 
 	*%dp_export_csv_prod(mpInput=&lmvOutLibrefUptLt..&lmvOutTabNameUptLt._nonkomp
 					, mpPath=&lmvPathOut.);
-	%dp_export_csv(mpInput=&lmvOutLibrefUptLt..&lmvOutTabNameUptLt._nonkomp, mpTHREAD_CNT=30, mpPath=&lmvPathOut.);
+	%dp_export_csv(mpInput=&lmvOutLibrefUptLt..&lmvOutTabNameUptLt._nonkomp, mpTHREAD_CNT=1, mpPath=&lmvPathOut.);
 	proc casutil;
 		droptable casdata="&lmvOutTabNameUptLt._nonkomp" incaslib="&lmvOutLibrefUptLt." quiet;
 	quit;
@@ -106,7 +106,7 @@
 	quit;
 	*%dp_export_csv_prod(mpInput=&lmvOutLibrefPmixLt..&lmvOutTabNamePmixLt._nonkomp
 					, mpPath=&lmvPathOut.);
-	%dp_export_csv(mpInput=&lmvOutLibrefPmixLt..&lmvOutTabNamePmixLt._nonkomp, mpTHREAD_CNT=30, mpPath=&lmvPathOut.);
+	%dp_export_csv(mpInput=&lmvOutLibrefPmixLt..&lmvOutTabNamePmixLt._nonkomp, mpTHREAD_CNT=1, mpPath=&lmvPathOut.);
 	proc casutil;
 		droptable casdata="&lmvOutTabNamePmixLt._nonkomp" incaslib="&lmvOutLibrefPmixLt." quiet;
 	quit;
@@ -137,7 +137,7 @@
 	quit;
 	*%dp_export_csv_prod(mpInput=&lmvOutLibrefGcLt..&lmvOutTabNameGcLt._nonkomp
 					, mpPath=&lmvPathOut.);
-	%dp_export_csv(mpInput=&lmvOutLibrefGcLt..&lmvOutTabNameGcLt._nonkomp, mpTHREAD_CNT=2, mpPath=&lmvPathOut.);
+	%dp_export_csv(mpInput=&lmvOutLibrefGcLt..&lmvOutTabNameGcLt._nonkomp, mpTHREAD_CNT=1, mpPath=&lmvPathOut.);
 	proc casutil;
 		droptable casdata="&lmvOutTabNameGcLt._nonkomp" incaslib="&lmvOutLibrefGcLt." quiet;
 	quit;
@@ -161,9 +161,8 @@
 	proc casutil;
 			promote casdata="&lmvOutTabNameUptSt._nonkomp" incaslib="&lmvOutLibrefUptSt." outcaslib="&lmvOutLibrefUptSt.";
 	quit;
-	*%dp_export_csv_prod(mpInput=&lmvOutLibrefUptSt..&lmvOutTabNameUptSt._nonkomp
-					, mpPath=&lmvPathOut.);
-	%dp_export_csv(mpInput=&lmvOutLibrefUptSt..&lmvOutTabNameUptSt._nonkomp, mpTHREAD_CNT=30, mpPath=&lmvPathOut.);
+	*%dp_export_csv_prod(mpInput=&lmvOutLibrefUptSt..&lmvOutTabNameUptSt._nonkomp, mpPath=&lmvPathOut.);
+	%dp_export_csv(mpInput=&lmvOutLibrefUptSt..&lmvOutTabNameUptSt._nonkomp, mpTHREAD_CNT=1, mpPath=&lmvPathOut.);
 	proc casutil;
 		droptable casdata="&lmvOutTabNameUptSt._nonkomp" incaslib="&lmvOutLibrefUptSt." quiet;
 	quit;
@@ -187,7 +186,7 @@
 	quit;
 	*%dp_export_csv_prod(mpInput=&lmvOutLibrefPmixSt..&lmvOutTabNamePmixSt._nonkomp
 					, mpPath=&lmvPathOut.);
-	%dp_export_csv(mpInput=&lmvOutLibrefPmixSt..&lmvOutTabNamePmixSt._nonkomp, mpTHREAD_CNT=30, mpPath=&lmvPathOut.);
+	%dp_export_csv(mpInput=&lmvOutLibrefPmixSt..&lmvOutTabNamePmixSt._nonkomp, mpTHREAD_CNT=1, mpPath=&lmvPathOut.);
 	proc casutil;
 		droptable casdata="&lmvOutTabNamePmixSt._nonkomp" incaslib="&lmvOutLibrefPmixSt." quiet;
 	quit;
@@ -211,7 +210,7 @@
 	quit;
 	*%dp_export_csv_prod(mpInput=&lmvOutLibrefGcSt..&lmvOutTabNameGcSt._nonkomp
 					, mpPath=&lmvPathOut.);
-	%dp_export_csv(mpInput=&lmvOutLibrefGcSt..&lmvOutTabNameGcSt._nonkomp, mpTHREAD_CNT=3, mpPath=&lmvPathOut.);
+	%dp_export_csv(mpInput=&lmvOutLibrefGcSt..&lmvOutTabNameGcSt._nonkomp, mpTHREAD_CNT=1, mpPath=&lmvPathOut.);
 	proc casutil;
 		droptable casdata="&lmvOutTabNameGcSt._nonkomp" incaslib="&lmvOutLibrefGcSt." quiet;
 	quit;	
@@ -241,7 +240,7 @@
 	quit;
 	*%dp_export_csv_prod(mpInput=&lmvOutLibrefUptLt..&lmvOutTabNameUptLt._komp
 					, mpPath=&lmvPathOut.);
-	%dp_export_csv(mpInput=&lmvOutLibrefUptLt..&lmvOutTabNameUptLt._komp, mpTHREAD_CNT=35, mpPath=&lmvPathOut.);
+	%dp_export_csv(mpInput=&lmvOutLibrefUptLt..&lmvOutTabNameUptLt._komp, mpTHREAD_CNT=1, mpPath=&lmvPathOut.);
 	proc casutil;
 		droptable casdata="&lmvOutTabNameUptLt._komp" incaslib="&lmvOutLibrefUptLt." quiet;
 	quit;
@@ -267,7 +266,7 @@
 	quit;
 	*%dp_export_csv_prod(mpInput=&lmvOutLibrefPmixLt..&lmvOutTabNamePmixLt._komp
 					, mpPath=&lmvPathOut.);
-	%dp_export_csv(mpInput=&lmvOutLibrefPmixLt..&lmvOutTabNamePmixLt._komp, mpTHREAD_CNT=30, mpPath=&lmvPathOut.);
+	%dp_export_csv(mpInput=&lmvOutLibrefPmixLt..&lmvOutTabNamePmixLt._komp, mpTHREAD_CNT=1, mpPath=&lmvPathOut.);
 	proc casutil;
 		droptable casdata="&lmvOutTabNamePmixLt._komp" incaslib="&lmvOutLibrefPmixLt." quiet;
 	quit;
@@ -296,7 +295,7 @@
 	quit;
 	*%dp_export_csv_prod(mpInput=&lmvOutLibrefGcLt..&lmvOutTabNameGcLt._komp
 					, mpPath=&lmvPathOut.);
-	%dp_export_csv(mpInput=&lmvOutLibrefGcLt..&lmvOutTabNameGcLt._komp, mpTHREAD_CNT=3, mpPath=&lmvPathOut.);
+	%dp_export_csv(mpInput=&lmvOutLibrefGcLt..&lmvOutTabNameGcLt._komp, mpTHREAD_CNT=1, mpPath=&lmvPathOut.);
 	proc casutil;
 		droptable casdata="&lmvOutTabNameGcLt._komp" incaslib="&lmvOutLibrefGcLt." quiet;
 	quit;
@@ -325,6 +324,7 @@
 	quit;
 	*/
 	/* Для первого месяца */
+	/*
 	proc casutil;
 		droptable casdata="&lmvOutTabNameUptSt._komp1" incaslib="&lmvOutLibrefUptSt." quiet;
 	quit;
@@ -345,15 +345,13 @@
 	quit;
 
 
-	*%dp_export_csv_prod(mpInput=&lmvOutLibrefUptSt..&lmvOutTabNameUptSt._komp1
-					, mpPath=&lmvPathOut.);
-	%dp_export_csv(mpInput=&lmvOutLibrefUptSt..&lmvOutTabNameUptSt._komp1, mpTHREAD_CNT=30, mpPath=&lmvPathOut.);	
+	%dp_export_csv(mpInput=&lmvOutLibrefUptSt..&lmvOutTabNameUptSt._komp1, mpTHREAD_CNT=1, mpPath=&lmvPathOut.);	
 	proc casutil;
 		droptable casdata="&lmvOutTabNameUptSt._komp1" incaslib="&lmvOutLibrefUptSt." quiet;
 	quit;
-	
+	*/
 	/* Для второго месяца */
-
+	/*
 	proc fedsql sessref=casauto;
 		create table &lmvOutLibrefUptSt..&lmvOutTabNameUptSt._komp2{options replace=true} as
 		select distinct t1.* 
@@ -370,15 +368,13 @@
 			promote casdata="&lmvOutTabNameUptSt._komp2" incaslib="&lmvOutLibrefUptSt." outcaslib="&lmvOutLibrefUptSt.";
 	quit;
 
-	*%dp_export_csv_prod(mpInput=&lmvOutLibrefUptSt..&lmvOutTabNameUptSt._komp2
-					, mpPath=&lmvPathOut.);
-	%dp_export_csv(mpInput=&lmvOutLibrefUptSt..&lmvOutTabNameUptSt._komp2, mpTHREAD_CNT=30, mpPath=&lmvPathOut.);	
+	%dp_export_csv(mpInput=&lmvOutLibrefUptSt..&lmvOutTabNameUptSt._komp2, mpTHREAD_CNT=1, mpPath=&lmvPathOut.);	
 	proc casutil;
 		droptable casdata="&lmvOutTabNameUptSt._komp2" incaslib="&lmvOutLibrefUptSt." quiet;
 	quit;
-	
+	*/
 	/* Для третьего месяца */
-
+/*
 	proc fedsql sessref=casauto;
 		create table &lmvOutLibrefUptSt..&lmvOutTabNameUptSt._komp3{options replace=true} as
 		select distinct t1.* 
@@ -394,14 +390,12 @@
 			promote casdata="&lmvOutTabNameUptSt._komp3" incaslib="&lmvOutLibrefUptSt." outcaslib="&lmvOutLibrefUptSt.";
 	quit;
 
-	*%dp_export_csv_prod(mpInput=&lmvOutLibrefUptSt..&lmvOutTabNameUptSt._komp3
-					, mpPath=&lmvPathOut.);
-	%dp_export_csv(mpInput=&lmvOutLibrefUptSt..&lmvOutTabNameUptSt._komp3, mpTHREAD_CNT=30, mpPath=&lmvPathOut.);	
+	%dp_export_csv(mpInput=&lmvOutLibrefUptSt..&lmvOutTabNameUptSt._komp3, mpTHREAD_CNT=1, mpPath=&lmvPathOut.);	
 	proc casutil;
 		droptable casdata="&lmvOutTabNameUptSt._komp3" incaslib="&lmvOutLibrefUptSt." quiet;
 	quit;
-	
-/*
+	*/
+
 	proc casutil;
 		droptable casdata="&lmvOutTabNamePmixSt._komp" incaslib="&lmvOutLibrefPmixSt." quiet;
 	quit;
@@ -412,20 +406,20 @@
 		from &lmvOutLibrefPmixSt..&lmvOutTabNamePmixSt. t1
 		inner join casuser.komp_matrix t2
 			on t1.LOCATION = t2.pbo_location_id
-			and t1.DATA = t2.month and t2.KOMP_ATTRIB = 1
+			and intnx('month',t1.DATA,0,'b') = t2.month and t2.KOMP_ATTRIB = 1
 		;
 	quit;
 	proc casutil;
 			promote casdata="&lmvOutTabNamePmixSt._komp" incaslib="&lmvOutLibrefPmixSt." outcaslib="&lmvOutLibrefPmixSt.";
 	quit;
-	%dp_export_csv_prod(mpInput=&lmvOutLibrefPmixSt..&lmvOutTabNamePmixSt._komp
-					, mpTHREAD_CNT=30 
+	%dp_export_csv(mpInput=&lmvOutLibrefPmixSt..&lmvOutTabNamePmixSt._komp
+					, mpTHREAD_CNT=1 
 					, mpPath=&lmvPathOut.);
 	proc casutil;
 		droptable casdata="&lmvOutTabNamePmixSt._komp" incaslib="&lmvOutLibrefPmixSt." quiet;
 	quit;
 
-*/
+
 
 	/* Для первого месяца */
 	proc casutil;
@@ -450,7 +444,7 @@
 
 	*%dp_export_csv_prod(mpInput=&lmvOutLibrefPmixSt..&lmvOutTabNamePmixSt._komp1
 					, mpPath=&lmvPathOut.);
-	%dp_export_csv(mpInput=&lmvOutLibrefPmixSt..&lmvOutTabNamePmixSt._komp1, mpTHREAD_CNT=30, mpPath=&lmvPathOut.);	
+	%dp_export_csv(mpInput=&lmvOutLibrefPmixSt..&lmvOutTabNamePmixSt._komp1, mpTHREAD_CNT=1, mpPath=&lmvPathOut.);	
 	proc casutil;
 		droptable casdata="&lmvOutTabNamePmixSt._komp1" incaslib="&lmvOutLibrefPmixSt." quiet;
 	quit;
@@ -475,7 +469,7 @@
 
 	*%dp_export_csv_prod(mpInput=&lmvOutLibrefPmixSt..&lmvOutTabNamePmixSt._komp2
 					, mpPath=&lmvPathOut.);
-	%dp_export_csv(mpInput=&lmvOutLibrefPmixSt..&lmvOutTabNamePmixSt._komp2, mpTHREAD_CNT=30, mpPath=&lmvPathOut.);		
+	%dp_export_csv(mpInput=&lmvOutLibrefPmixSt..&lmvOutTabNamePmixSt._komp2, mpTHREAD_CNT=1, mpPath=&lmvPathOut.);		
 	proc casutil;
 		droptable casdata="&lmvOutTabNamePmixSt._komp2" incaslib="&lmvOutLibrefPmixSt." quiet;
 	quit;
@@ -500,7 +494,7 @@
 	*%dp_export_csv_prod(mpInput=&lmvOutLibrefPmixSt..&lmvOutTabNamePmixSt._komp3
 					, mpPath=&lmvPathOut.);
 					
-	%dp_export_csv(mpInput=&lmvOutLibrefPmixSt..&lmvOutTabNamePmixSt._komp3, mpTHREAD_CNT=30, mpPath=&lmvPathOut.);
+	%dp_export_csv(mpInput=&lmvOutLibrefPmixSt..&lmvOutTabNamePmixSt._komp3, mpTHREAD_CNT=1, mpPath=&lmvPathOut.);
 	proc casutil;
 		droptable casdata="&lmvOutTabNamePmixSt._komp3" incaslib="&lmvOutLibrefPmixSt." quiet;
 	quit;
@@ -524,7 +518,7 @@
 	quit;
 	*%dp_export_csv_prod(mpInput=&lmvOutLibrefGcSt..&lmvOutTabNameGcSt._komp
 					, mpPath=&lmvPathOut.);
-	%dp_export_csv(mpInput=&lmvOutLibrefGcSt..&lmvOutTabNameGcSt._komp, mpTHREAD_CNT=5, mpPath=&lmvPathOut.);				
+	%dp_export_csv(mpInput=&lmvOutLibrefGcSt..&lmvOutTabNameGcSt._komp, mpTHREAD_CNT=1, mpPath=&lmvPathOut.);				
 	proc casutil;
 		droptable casdata="&lmvOutTabNameGcSt._komp" incaslib="&lmvOutLibrefGcSt." quiet;
 	quit;

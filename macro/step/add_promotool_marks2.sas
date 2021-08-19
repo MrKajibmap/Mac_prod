@@ -455,12 +455,13 @@
 	quit;
 
 	/* Временная подмена таблицы product_chain */
-	%load_product_chain(mpOutput = mn_short.product_chain);
+	/* %load_plm(mpOutput = mn_dict.product_chain)*/
+	/*%load_product_chain(mpOutput = mn_dict.product_chain);*/
 	
 	data &lmvOutCaslib..product_chain1;
 		/* Временная подмена таблицы product_chain */
 		/* set &lmvInLib..PRODUCT_CHAIN; */
-		set mn_short.product_chain;
+		set mn_dict.product_chain;
 		/* where valid_to_dttm>=&lmvReportDttm.; применяем усл для версионирования*/
 	run;
 

@@ -107,7 +107,7 @@
 		*/
 		connect using pt;
 		/* truncate target table in PT PG schema */
-				EXECUTE BY CONN
+				EXECUTE BY pt
 					(
 						TRUNCATE TABLE public.&lmvTabNmIn.
 					)

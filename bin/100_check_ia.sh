@@ -1,1 +1,0 @@
-/opt/sas/mcd_config/bin/start_sas.sh /opt/sas/mcd_config/macro/flow/100_check_ia.sas 100_check_ia

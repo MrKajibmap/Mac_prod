@@ -74,31 +74,41 @@ quit;
 )
 
 /* b. Сборка витрины для модели прогнозирования n_a и t_a */
-%include '/opt/sas/mcd_config/macro/step/pt/promo_effectiveness_abt_building.sas';
+%include '/opt/sas/mcd_config/macro/step/pt/promo_effectiveness_abt_building_dev.sas';
 %promo_effectiveness_abt_building(
 	promo_lib = casuser, 
 	ia_promo = past_promo,
 	ia_promo_x_pbo = promo_pbo_enh,
 	ia_promo_x_product = promo_prod_enh,
 	hist_start_dt = date '2019-01-01',
+	ia_media = media_enh,
 	filter = t1.channel_cd = 'ALL',
 	calendar_start = '01jan2017'd,
 	calendar_end = '01jan2022'd
-)
+);
 
 /* c. Обучение модели для прогнозирования n_a  и t_a */
+
+/* Сэмплируем обучающую выборку */
+/* proc surveyselect data=nac.na_abt17 out=nac.na_train_sample sampsize=500000; */
+/* run; */
+/*  */
+data casuser.na_abt17;
+	set nac.na_abt17;
+run;
+
 %include '/opt/sas/mcd_config/macro/step/pt/promo_effectiveness_model_fitting.sas';
 %promo_effectiveness_model_fit(
-	data = public.na_train,
+	data = casuser.na_abt17,
 	target = n_a,
-	output = na_prediction_model,
+	output = na_prediction_model_test,
 	hyper_params = &default_hyper_params.
 )
 
 %promo_effectiveness_model_fit(
-	data = public.na_train,
+	data = casuser.na_abt17,
 	target = t_a,
-	output = ta_prediction_model,
+	output = ta_prediction_model_test,
 	hyper_params = &default_hyper_params.
 )
 

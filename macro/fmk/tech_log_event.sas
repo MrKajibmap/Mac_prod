@@ -129,11 +129,29 @@
 				);
 		QUIT;
 		
+		%local lmvProcDuration;
+		
+		PROC SQL NOPRINT;
+			connect using etl_cfg;
+			select exec_tm into :lmvProcDuration
+			from connection to etl_cfg 
+			(
+				select
+					cast(end_dttm as timestamp (0)) - cast(start_dttm as timestamp (0)) as exec_tm
+				from etl_cfg.cfg_log_event
+				where
+					process_nm=%STR(%')&lmvProcessNm.%STR(%') and
+					process_id=&lmvProcessId. and
+					event_id=&mvLOG_EVENT_ID.
+			);
+		QUIT;
+		
+		%let lmvProcDuration = %trim(&lmvProcDuration.);
 		/*Отправка сообщения в телеграмм */
 		filename resp temp ;
 		proc http 
 			 method="POST"
-			  url="https://api.telegram.org/bot&TG_BOT_TOKEN./sendMessage?chat_id=-1001360913796&text=&mvTGMessage."
+			  url="https://api.telegram.org/bot&TG_BOT_TOKEN./sendMessage?chat_id=-1001360913796&text=&mvTGMessage.(duration: &lmvProcDuration.)"
 			 ct="application/json"
 			 out=resp; 
 		run;

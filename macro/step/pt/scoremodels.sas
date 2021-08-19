@@ -60,27 +60,30 @@
 	
 	
 	/*** 3. Прогнозирование n_a и t_a для будущий акций ***/
-	%include '/opt/sas/mcd_config/macro/step/pt/promo_effectiveness_model_scoring.sas';
+	%include '/opt/sas/mcd_config/macro/step/pt/promo_effectiveness_model_scoring_dev.sas';
 	%scoring_building(
 		promo_lib = casuser, 
 		ia_promo = promo_tool_promo,
 		ia_promo_x_pbo = promo_pbo_enh,
 		ia_promo_x_product = promo_prod_enh,
+		ia_media = media_enh,
 		calendar_start = '01jan2017'd,
 		calendar_end = '01jan2022'd
 	);
 	
 	/* Скоринг t_a */
 	%promo_effectivness_predict(
-		target = na,
-		data = public.promo_effectivness_scoring
-	)
-	
+		model = ta_prediction_model_test,
+		target = ta,
+		data = casuser.promo_effectivness_scoring
+	);
+
 	/* Скоринг n_a */
 	%promo_effectivness_predict(
-		target = ta,
-		data = public.promo_effectivness_scoring
-	)
+		model = na_prediction_model_test,
+		target = na,
+		data = casuser.promo_effectivness_scoring
+	);
 	
 	
 	/*** 4. Разложение GC на промо компоненты ***/

@@ -7,7 +7,7 @@
 	 maxbranch=2 
      assignmissing=useinsearch 
 	 minuseinsearch=5
-     ntrees=1 /*100*/
+     ntrees=20
      maxdepth=20
      inbagfraction=0.7
      minleafsize=5
@@ -34,31 +34,14 @@
 		* hyper_params : Гиперпараметры модели
 */
 
-	/* Стираем результирующие таблицы с обученными моделями */
+	/* Стираем результирующую таблицу с обученной моделью */
 	proc casutil;
 		droptable casdata="&output." incaslib="public" quiet;
 	run;
 	
-	/* Обучение модели */
 	proc forest data=&data.
-		&hyper_params.;
+		&default_hyper_params.;
 		input 
-			Bundle
-			Discount
-			EVMSet
-			Giftforpurchaseforproduct
-			GiftforpurchaseNonProduct
-			GiftforpurchaseSampling
-			NPPromoSupport
-			OtherDiscountforvolume
-			Pairs
-			Pairsdifferentcategories
-			Productlineextension
-			ProductnewlaunchLTO
-			ProductnewlaunchPermanentinclite
-			Productrehitsameproductnolineext
-			Temppricereductiondiscount
-			Undefined
 			NUMBER_OF_OPTIONS
 			NUMBER_OF_PRODUCTS
 			NECESSARY_AMOUNT
@@ -82,27 +65,18 @@
 			weekday
 			month
 			year
-			regular_weekend_flag
-			weekend_flag
-			Christmas
-			Christmas_Day
-			Day_After_New_Year
-			Day_of_Unity
-			Defendence_of_the_Fatherland
-			International_Womens_Day
-			Labour_Day
-			National_Day
-			New_Year_shift
-			New_year
-			Victory_Day
 			MEAN_RECEIPT_QTY
 			STD_RECEIPT_QTY
-			MEAN_SALES_QTY
-			STD_SALES_QTY
+			mean_sales_qty
+			std_sales_qty
+			mean_past_&target.
+			temperature
+			precipitation
 				/ level = interval;
-		input 
-/* 			LVL3_ID */
-/* 			LVL2_ID */
+		input
+			promo_group_id
+			promo_mechanics_name
+		/* 	pbo_location_id */
 			AGREEMENT_TYPE_ID
 			BREAKFAST_ID
 			BUILDING_TYPE_ID
@@ -110,8 +84,14 @@
 			DELIVERY_ID
 			DRIVE_THRU_ID
 			MCCAFE_TYPE_ID
-			PRICE_LEVEL_ID
+		/*  PRICE_LEVEL_ID */
 			WINDOW_TYPE_ID
+			regular_weekend_flag
+			weekend_flag
+			Christmas_Day
+			Day_After_New_Year
+			New_Year_shift
+			New_year
 			 / level = nominal;
 		id promo_id pbo_location_id sales_dt;
 		target &target. / level = interval;
@@ -119,10 +99,12 @@
 		;
 	run;
 
+	/* Промоутим модель */
 	proc casutil;
 	    promote casdata="&output." incaslib="public" outcaslib="public";
 	run;
 
+	/* Сохраняем на диск на случай падейния среды */
     proc astore;
         download RSTORE=public.&output. store="/data/ETL_BKP/&output.";
     run;

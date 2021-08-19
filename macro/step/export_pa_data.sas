@@ -23,6 +23,13 @@
 ****************************************************************************
 *  08-09-2020  Борзунов     Начальное кодирование
 ****************************************************************************/
+%macro echo_file(mpFileRef);
+   data _null_;
+      infile &mpFileRef;
+      input;
+      put _infile_;
+   run;
+%mend echo_file;
 
 %macro export_pa_data(mpPlanAreaNm=); 
 	cas casauto sessopts=(metrics=true);
@@ -35,7 +42,7 @@
 	%global SYS_PROCHTTP_STATUS_CODE SYS_PROCHTTP_STATUS_PHRASE;
 	%let SYS_PROCHTTP_STATUS_CODE=;
 	%let SYS_PROCHTTP_STATUS_PHRASE=;
-	%let SERVICESBASEURL=10.252.151.3/;
+	%let SERVICESBASEURL=10.252.151.9/;
 	
 	filename resp TEMP;
 	/* Извлечение списка всех доступных planningAreaName*/

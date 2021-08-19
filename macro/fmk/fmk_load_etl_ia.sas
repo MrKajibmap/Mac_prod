@@ -89,6 +89,8 @@
 			set status_cd = 'C' where resource_id = &lmvResId.
 										and status_cd in ('A', 'E') 
 			);
+			
+		disconnect from etl_cfg;
 	quit;
 
 	/* Забираем самую свежую выгрузку, помеченную статусом 'P' */
@@ -154,6 +156,7 @@
 					 and c.table_schema='etl_ia'
 		)
 		;
+		disconnect from etl_ia;
 	quit;
 	
 	/*Проверка на корректность структуры таблицы */
@@ -319,6 +322,7 @@
 			
 			COMMIT;
 		);
+		disconnect from etl_ia;
 	quit;
 	%fmk_load_etl_ia_error_check(mpResId = &lmvResId. ,mpResource = &lmvResource.);
 	
@@ -382,6 +386,7 @@
 					from etl_cfg.cfg_resource_registry where resource_id = &lmvResId. and status_cd = 'P');
 		)
 	;
+	disconnect from etl_cfg;
 	quit;
 	
 	%tech_log_event(mpMODE=END, mpPROCESS_NM=fmk_load_etl_ia_&lmvResource.);

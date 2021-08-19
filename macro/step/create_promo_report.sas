@@ -146,5 +146,25 @@
 			,product_nm
 		FROM casuser.promo_report_view;
 	quit;
+	
+	proc casutil;
+		DROPTABLE CASDATA="PROMO_LIST_REPORT" INCASLIB="public" QUIET;
+		DROPTABLE CASDATA="ORG_PROMO_LIST_REPORT" INCASLIB="public" QUIET;
+		DROPTABLE CASDATA="PRODUCT_PROMO_LIST_REPORT" INCASLIB="public" QUIET;
+		promote casdata="PROMO_LIST_REPORT" casout="PROMO_LIST_REPORT" incaslib="casuser" outcaslib="public";
+		promote casdata="ORG_PROMO_LIST_REPORT" casout="ORG_PROMO_LIST_REPORT" incaslib="casuser" outcaslib="public";
+		promote casdata="PRODUCT_PROMO_LIST_REPORT" casout="PRODUCT_PROMO_LIST_REPORT" incaslib="casuser" outcaslib="public";
+	run;
+	
+	%dp_export_csv(mpInput=public.PROMO_LIST_REPORT, 
+	mpTHREAD_CNT=1, mpPath=/data/files/output/);
+
+
+	%dp_export_csv(mpInput=public.ORG_PROMO_LIST_REPORT, 
+	mpTHREAD_CNT=1, mpPath=/data/files/output/);
+
+
+	%dp_export_csv(mpInput=public.PRODUCT_PROMO_LIST_REPORT, 
+	mpTHREAD_CNT=1, mpPath=/data/files/output/);
 
 %mend create_promo_report;

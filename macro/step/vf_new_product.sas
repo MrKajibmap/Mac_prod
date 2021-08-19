@@ -12,27 +12,17 @@
 	%let lmvInLib=ETL_IA;
 	%let lmvFilter = t1.channel_cd = 'ALL';
 
-	%if %sysfunc(exist(mn_short.product_chain))=0 %then %do;
-		%add_promotool_marks2(mpOutCaslib=mn_short,
-							mpPtCaslib=pt);
-		proc fedsql sessref=casauto noprint;
-			create table casuser.product_chain{options replace=true} as
-			  select 
-				LIFECYCLE_CD
-				,PREDECESSOR_DIM2_ID
-				,PREDECESSOR_PRODUCT_ID
-				,SCALE_FACTOR_PCT
-				,SUCCESSOR_DIM2_ID
-				,SUCCESSOR_PRODUCT_ID
-				,PREDECESSOR_END_DT
-				,SUCCESSOR_START_DT
-			  /*from mn_short.product_chain_enh*/
-			  from mn_short.product_chain
-			;
+	%if %sysfunc(exist(mn_dict.product_chain))=0 %then %do;
+		/* %load_plm(mpOutput = mn_dict.product_chain); */
+		proc cas;
+		 loadtable / caslib 'mn_dict',
+			path='product_chain.sashdat',
+			casout={caslib='mn_dict' name='product_chain', replace=true};
+		run;
 		quit;
-
+	
 		proc casutil;
-		  promote casdata="product_chain" incaslib="casuser" outcaslib="mn_short";
+			promote casdata='product_chain' incaslib='mn_dict' outcaslib='mn_dict';
 		run;
 	%end;
 
@@ -49,7 +39,7 @@
 				coalesce(datepart(PREDECESSOR_END_DT), date %tslit(&VF_FC_AGG_END_DT)) as PREDECESSOR_END_DT,
 				SCALE_FACTOR_PCT
 			from
-				&lmvInCaslib..product_chain
+				mn_dict.product_chain
 			where
 				LIFECYCLE_CD = 'N'
 		;

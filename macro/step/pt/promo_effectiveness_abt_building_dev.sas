@@ -2,7 +2,7 @@
 
 /* 
 	Список выходных дней в РФ с 2018 по 2023.
-	Внутрь скрипта это data step положить не получается, поэтому
+	Внутрь макроса это data step положить не получается, поэтому
 	вынесен это шаг отдельно
 */
 data nac.russia_weekend;
@@ -74,11 +74,6 @@ datalines;
 ;
 run;
 
-%macro raws_count(a, data);
-	proc fedsql sessref=casauto;
-		select count(1) as &data. from &a..&data.;
-	quit;
-%mend;
 
 %macro promo_effectiveness_abt_building(
 	promo_lib = casuser, 
@@ -91,36 +86,35 @@ run;
 	calendar_start = '01jan2017'd,
 	calendar_end = '01jan2022'd
 );
-
-/* %let promo_lib = casuser; */
-/* %let ia_promo = past_promo; */
-/* %let ia_promo_x_pbo = promo_pbo_enh; */
-/* %let ia_promo_x_product = promo_prod_enh; */
-/* %let ia_media = media_enh; */
-/* %let hist_start_dt = date '2019-01-01'; */
-/* %let filter = t1.channel_cd = 'ALL'; */
-/* %let calendar_start = '01jan2017'd; */
-/* %let calendar_end = '01jan2022'd; */
-
 /*
-	Макрос, который собирает обучающую выборку для модели прогнозирующей
-		na (и ta).
-	Схема вычислений:
+	Скрипт, который собирает обучающую выборку для модели прогнозирующей na (и ta).
+
+	Порядок действий:
+
 	1. Вычисление каркаса таблицы промо акций: промо, ПБО, товар, интервал, механика
-	2. One hot кодировка механики промо акции
-	3. Количество товаров, участвующих в промо (количество уникальных product_id),
+	2. Количество товаров, участвующих в промо (количество уникальных product_id),
 		количество позиций (количество уникальных option_number), 
 		количество единиц товара, необходимое для покупки
-	4. TRP.
-	5. Цены <--- TODO.
-	6. Пускай у нас имеется k товарных категорий, тогда создадим вектор размерности k.
+	3. TRP
+	4. Цены <--- TODO
+	5. Пускай у нас имеется k товарных категорий, тогда создадим вектор размерности k.
 		Каждая компонента этого вектора описывает количество товаров данной 
-		категории участвующих в промо.
-	7. Атрибуты ПБО
-	8. Календарные признаки и праздники
-	9. Признаки описывающие трафик ресторана (количество чеков)
-	10. Признаки описывающие продажи промо товаров
-	11. Добавление целевой переменной
+		категории участвующих в промо
+	6. Атрибуты ПБО
+	7. Календарные признаки и праздники
+	8. Признаки описывающие трафик ресторана (количество чеков)
+	9. Признаки описывающие продажи промо товаров
+	10. Добавление целевой переменной
+	11.	Убираем временные закрытия
+	12.	Удалем пары промо-ресторан, в которых одни пропуски
+	13. Обрезаем концы (если промо в ресторане закончилось раньше,
+		 либо началось позже)
+	14. Заменеям на миссинги значения, которые отклоняются на 2,5 стандартных 
+		 отклонений от среднего.
+	15. Если среднее t_a < 10, то пропуски заменяем нулями, иначе заменяем средним
+	16. Дополнительная кодировка промо категорий
+	17. Добавляем погоду
+	
 
 	Параметры:
 	----------
@@ -136,9 +130,12 @@ run;
 	Выход:
 	------
 		* Запромоученая в public и скопированная в nac таблица na_train
-*/	
+*/
 
-	/****** 1. Вычисление каркаса таблицы промо акций ******/
+
+	/************************************************************************************
+	 * 1. Вычисление каркаса таблицы промо акций										*
+	 ************************************************************************************/
 
 	/* Загружаем товарную и географическую иерархии */
 	proc casutil;
@@ -306,8 +303,7 @@ run;
 				t1.CHANNEL_CD,
 				t1.NP_GIFT_PRICE_AMT,
 				t1.PROMO_GROUP_ID,
-				compress(promo_mechanics,'', 'ak') as promo_mechanics_name,
-				1 as promo_flag		
+				compress(promo_mechanics,'', 'ak') as promo_mechanics_name
 			from
 				&promo_lib..&ia_promo. as t1
 			inner join
@@ -328,14 +324,13 @@ run;
 			output;
 		end;
 	run;
-
-	%raws_count(public,na_abt1);
 	
 	/* Сохраняем связующие таблицы для скоринга */
 	data nac.pbo_lvl_all;
 		set public.pbo_lvl_all;
 	run;
 
+	/* Сохраняем связующие таблицы для скоринга */
 	data nac.product_lvl_all;
 		set public.product_lvl_all;
 	run;
@@ -353,82 +348,17 @@ run;
 		droptable casdata="lvl1" incaslib="public" quiet;
 		droptable casdata="pbo_lvl_all" incaslib="public" quiet;
 		droptable casdata="product_lvl_all" incaslib="public" quiet;
-		droptable casdata="promo_skelet" incaslib="public" quiet;
 	run;
-	
 
-	/****** 2. One hot кодировка механики промо акции ******/
-	
-	/* Определяем механики промо акций */
-	proc fedsql sessref=casauto;
-		create table public.promo_mechanics{options replace=true} as
-			select distinct
-				promo_id,
-				promo_mechanics_name,
-				promo_flag
-			from
-				public.na_abt1
-		;
-	quit;
-	
-	/* Транспонируем механику промо в вектор */
-	proc cas;
-	transpose.transpose /
-		table = {
-			name="promo_mechanics",
-			caslib="public",
-			groupby={"promo_id"}}
-		transpose={"promo_flag"} 
-		id={"promo_mechanics_name"} 
-		casout={name="promo_mechanics_one_hot", caslib="public", replace=true};
-	quit;
-	
-	/* Заменяем пропуски на нули */
-	data public.promo_mechanics_one_hot_zero;
-		set public.promo_mechanics_one_hot;
-		drop _name_;
-		array change _numeric_;
-	    	do over change;
-	            if change=. then change=0;
-	        end;
-	run ;
-	
-	/* Добавляем переменные к витрине */
-	proc fedsql sessref=casauto;
-		create table public.na_abt2{options replace=true} as
-			select
-				t1.pbo_location_id,
-				t1.promo_lifetime,
-				t1.CHANNEL_CD,
-				t1.NP_GIFT_PRICE_AMT,
-				t1.PROMO_GROUP_ID,
-				t1.sales_dt,
-				t1.promo_mechanics_name,
-				t2.*
-			from
-				public.na_abt1 as t1
-			left join
-				public.promo_mechanics_one_hot_zero as t2
-			on
-				t1.promo_id = t2.promo_id
-		;
-	quit;
+	/* 	------------ End. Вычисление каркаса таблицы промо акций ------------- */
 
-	%raws_count(public,na_abt2);
-	
-	proc casutil;
-		droptable casdata="na_abt1" incaslib="public" quiet;
-		droptable casdata="promo_mechanics" incaslib="public" quiet;
-		droptable casdata="promo_mechanics_one_hot" incaslib="public" quiet;
-		droptable casdata="promo_mechanics_one_hot_zero" incaslib="public" quiet;
-	run;
-	
 
-	/****** 
-		3. Количество товаров, участвующих в промо (количество уникальных
-			product_id), количество позиций (количество уникальных option_number), 
-			количество единиц товара, необходимое для покупки 
-	******/
+	/************************************************************************************
+	 * 2. Считаем количество товаров, участвующих в промо (количество уникальных  		*
+	 *		product_id), количество позиций (количество уникальных option_number),      *
+	 *		количество единиц товара, необходимое для покупки						    *
+	 ************************************************************************************/
+
 	proc fedsql sessref=casauto;
 		/* Количество товаров, позиций участвующих в промо */
 		create table public.product_characteristics{options replace=true} as
@@ -461,7 +391,7 @@ run;
 	
 	/* Добавляем признаки в витрину и добавляем номер недели для следующего шага */
 	proc fedsql sessref=casauto;
-		create table public.na_abt3{options replace=true} as
+		create table public.na_abt2{options replace=true} as
 			select
 				t1.*,
 				intnx('week.2',t1.sales_dt, 0, 'b') as week_start,
@@ -469,7 +399,7 @@ run;
 				t2.number_of_products,
 				t3.necessary_amount
 			from
-				public.na_abt2 as t1
+				public.na_abt1 as t1
 			left join
 				public.product_characteristics as t2
 			on
@@ -480,22 +410,20 @@ run;
 				t1.promo_id = t3.promo_id	
 		;
 	quit;
-
-	%raws_count(public,na_abt3);
 	
+	/* Удаляем промежуточные таблицы */
 	proc casutil;
-		droptable casdata="na_abt2" incaslib="public" quiet;
+		droptable casdata="na_abt1" incaslib="public" quiet;
 		droptable casdata="product_characteristics" incaslib="public" quiet;
 		droptable casdata="product_characteristics2" incaslib="public" quiet;
 	run;
 
+	/* 	------------ End. Подсчет количества промо товаров в акции ------------- */
 
-	/****** 4. Добавление TRP ******/
-	proc casutil;
-		droptable casdata="na_abt4" incaslib="public" quiet;
-		droptable casdata="number_of_promo_days" incaslib="public" quiet;
-	run;
-	
+
+	/************************************************************************************
+	 * 3. Добавление TRP																*
+	 ************************************************************************************/
 
 	/* Считаем сколько дней в неделе было промо */
 	proc fedsql sessref=casauto;
@@ -505,7 +433,7 @@ run;
 				t1.week_start,
 				count(distinct sales_dt) as number_of_promo_days
 			from 
-				public.na_abt3 as t1
+				public.na_abt2 as t1
 			group by
 				t1.promo_id,
 				t1.week_start
@@ -514,12 +442,12 @@ run;
 
 	/* Добавляем TRP и делим на количество промо дней в неделе */
 	proc fedsql sessref=casauto;
-		create table public.na_abt4{option replace=true} as
+		create table public.na_abt3{option replace=true} as
 			select
 				t1.*,
 				coalesce(divide(t2.trp, t3.number_of_promo_days), 0) as trp
 			from
-				public.na_abt3 as t1
+				public.na_abt2 as t1
 			left join
 				&promo_lib..&ia_media. as t2
 			on
@@ -533,15 +461,18 @@ run;
 		;	
 	quit;
 
-	%raws_count(public,na_abt4);
-
+	/* Удаляем промежуточные таблицы */
 	proc casutil;
-		droptable casdata="na_abt3" incaslib="public" quiet;
+		droptable casdata="na_abt2" incaslib="public" quiet;
 		droptable casdata="number_of_promo_days" incaslib="public" quiet;
 	run;
 
+	/* 	------------ End. Добавление TRP ------------- */
 
-	/****** 5. Добавление цены TODO ******/
+
+	/************************************************************************************
+	 * 4. Добавление цены: TODO															*
+	 ************************************************************************************/
 	/* 
 		тут на самом деле вопрос, какие ценовые признаки добавлять в модель 
 			* есть промо без изменения цены
@@ -552,13 +483,16 @@ run;
 			
 	*/
 	
-	
+	/* 	------------ End. Добавление цены ------------- */	
 
-	/****** 
-		5. Пускай у нас имеется k товарных категорий,
-		 тогда создадим вектор размерности k. Каждая компонента этого
-		 вектора описывает количество товаров данной категории участвующих в промо. 
-	******/
+
+	/************************************************************************************
+	 * 5. Пускай у нас имеется k товарных категорий,									*
+	 *	  	тогда создадим вектор размерности k. Каждая компонента этого				*
+	 *	 	вектора описывает количество товаров данной категории участвующих в промо.	*
+	 ************************************************************************************/
+
+	/* Загружаем информацию о товарах */
 	proc casutil;
 		load data=etl_ia.product(
 			where=(
@@ -698,9 +632,9 @@ run;
 	        end;
 	run;
 	
-	/* Добавляем признаки в витрину
-	 Inner join  потому что если нет списка товаров для акции,
-		 такие акции не рассматриваем. */
+	/* Добавляем признаки в витрину. Inner join потому,
+			что если нет списка товаров для акции,
+			такие акции не рассматриваем. */
 	proc fedsql sessref=casauto;
 		create table public.na_abt5{options replace=true} as
 			select
@@ -722,16 +656,15 @@ run;
 				t2.UndefinedProductGroup,
 				t2.ValueMeal
 			from
-				public.na_abt4 as t1
+				public.na_abt3 as t1
 			inner join
 				public.promo_category_transposed_zero as t2
 			on
 				t1.promo_id = t2.promo_id
 		;
 	quit;
-
-	%raws_count(public,na_abt5);
 	
+	/* Удаляем промежуточные таблицы */
 	proc casutil;
 		droptable casdata="promo_category" incaslib="public" quiet;
 		droptable casdata="promo_category_transposed" incaslib="public" quiet;
@@ -741,10 +674,17 @@ run;
 		droptable casdata="IA_product" incaslib="public" quiet;
 		droptable casdata="IA_product_HIERARCHY" incaslib="public" quiet;
 		droptable casdata="IA_product_ATTRIBUTES" incaslib="public" quiet;
-		droptable casdata="na_abt4" incaslib="public" quiet;
+		droptable casdata="na_abt3" incaslib="public" quiet;
 	run;
 
-	/****** 6. Атрибуты ПБО ******/
+	/* 	------------ End. Добавление информации о товарах в промо ------------- */	
+
+
+	/************************************************************************************
+	 * 6. Добавляем атрибуты ПБО														*
+	 ************************************************************************************/
+
+	/* Загружаем справочники ПБО */
 	proc casutil;	
 		load data=etl_ia.pbo_location(
 				where=(
@@ -808,7 +748,7 @@ run;
 				t3.A_DELIVERY,
 				t3.A_DRIVE_THRU,
 				t3.A_MCCAFE_TYPE,
-				t3.A_PRICE_LEVEL,
+ 				t3.A_PRICE_LEVEL,  /* странные значения принимает переменная */
 				t3.A_WINDOW_TYPE
 			from 
 				public.pbo_hier_flat t2
@@ -879,6 +819,15 @@ run;
 					t1.&variable = t2.&variable
 			;
 		quit;
+
+		/* Удаляем временные таблицы */
+		proc casutil;
+	 		droptable casdata="encoding_&variable." incaslib="public" quiet;
+	 	run;
+
+		proc datasets library=work nolist;
+			delete unique;
+		run;
 	
 	%mend;
 	
@@ -905,7 +854,7 @@ run;
 				t2.A_DELIVERY_id as delivery_id,
 				t2.A_DRIVE_THRU_id as drive_thru_id,
 				t2.A_MCCAFE_TYPE_id as mccafe_type_id,
-				t2.A_PRICE_LEVEL_id as price_level_id,
+/* 				t2.A_PRICE_LEVEL_id as price_level_id, */
 				t2.A_WINDOW_TYPE_id as window_type_id
 			from
 				public.na_abt5 as t1
@@ -916,13 +865,12 @@ run;
 		;
 	quit;
 
-	%raws_count(public,na_abt6);
-
-	/* Копируем таблицу pbo_dictionary_ml в nac */
+	/* Копируем таблицу pbo_dictionary_ml в nac для сборки скоринга */
 	data nac.pbo_dictionary_ml;
 		set public.pbo_dictionary_ml;
 	run;
 	
+	/* Удаляем промежуточные таблицы */
 	proc casutil;
 		droptable casdata="na_abt5" incaslib="public" quiet;
 		droptable casdata="attr_transposed" incaslib="public" quiet;
@@ -933,8 +881,14 @@ run;
 		droptable casdata='IA_PBO_LOC_ATTRIBUTES' incaslib='public' quiet;
 	run;
 
+	/* 	------------ End. Добавление атрибутов ПБО ------------- */	
 
-	/****** 7. Календарные признаки и праздники ******/
+
+	/************************************************************************************
+	 * 7. Календарные признаки и праздники												*
+	 ************************************************************************************/
+
+	/* Создаем каркас с датами */
 	data work.cldr_prep;
 		retain date &calendar_start.;
 		do while(date <= &calendar_end.);
@@ -944,6 +898,7 @@ run;
 		format date ddmmyy10.;
 	run;
 	
+	/* Считаем календарные признаки */
 	proc sql;
 		create table work.cldr_prep_features as 
 			select
@@ -1049,8 +1004,8 @@ run;
 		;
 	quit;
 
-	%raws_count(public,na_abt7);
-	
+
+	/* Удаляем промежуточные таблицы */	
 	proc casutil;
 		droptable casdata="na_abt6" incaslib="public" quiet;
 		droptable casdata="russia_weekend_transposed" incaslib="public" quiet;
@@ -1059,16 +1014,48 @@ run;
 		droptable casdata="russia_weekend" incaslib="public" quiet;
 	run;
 
-	
-	/****** 8. Признаки описывающие трафик ресторана ******/
+	/* 	------------ End. Календарные признаки и праздники ------------- */	
+
+
+	/************************************************************************************
+	 * 8. Признаки описывающие трафик ресторана											*
+	 ************************************************************************************/
+
+	/* Загружаем продажи ресторанов */
 	proc casutil;
 		load data=etl_ia.pbo_sales(
 			where=(
 				&ETL_CURRENT_DTTM. <= valid_to_dttm and
-				&ETL_CURRENT_DTTM. >= valid_from_dttm
+				&ETL_CURRENT_DTTM. >= valid_from_dttm and
+				(sales_dt <= '1mar2020'd or sales_dt >= '1jul2020'd)
 			)
 		) casout='ia_pbo_sales_history' outcaslib='public' replace;
 	run;
+	
+	/* Среднее количество чеков за год до начала промо в ресторане */
+	proc fedsql sessref=casauto;
+		create table public.promo_skelet_meat{option replace=true} as
+			select
+				t1.PROMO_ID,
+				t1.pbo_location_id,
+				t1.START_DT,
+				t1.CHANNEL_CD,
+				mean(t2.receipt_qty) as mean_receipt_qty
+			from
+				public.promo_skelet as t1
+			inner join
+				public.ia_pbo_sales_history as t2
+			on
+				(t1.pbo_location_id = t2.pbo_location_id) and
+				(t2.sales_dt < t1.start_dt) and
+				(t2.sales_dt >= t1.start_dt - 365)
+			group by
+				t1.PROMO_ID,
+				t1.pbo_location_id,
+				t1.START_DT,
+				t1.CHANNEL_CD
+		;	
+	quit;
 	
 	/* Агрегируем чеки до ПБО, год, месяц, день недели */
 	proc fedsql sessref=casauto;
@@ -1141,10 +1128,15 @@ run;
 		create table public.na_abt8{options replace=true} as
 			select
 				t1.*,
-				coalesce(t2.mean_receipt_qty, t3.mean_receipt_qty) as mean_receipt_qty,
+				coalesce(t2.mean_receipt_qty, t4.mean_receipt_qty, t3.mean_receipt_qty) as mean_receipt_qty,
 				coalesce(t2.std_receipt_qty, t3.std_receipt_qty) as std_receipt_qty	
 			from
 				public.na_abt7 as t1
+			left join
+				public.promo_skelet_meat as t4
+			on
+				t1.pbo_location_id = t4.pbo_location_id and
+				t1.promo_id = t4.promo_id
 			left join
 				public.gc_aggr_smart as t2
 			on
@@ -1161,18 +1153,23 @@ run;
 		;
 	quit;
 
-	%raws_count(public,na_abt8);
-	
+	/* Удаляем промежуточные таблицы */	
 	proc casutil;
 		droptable casdata="gc_aggr_smart" incaslib="public" quiet;
 		droptable casdata="gc_aggr_dump" incaslib="public" quiet;
 		droptable casdata="na_abt7" incaslib="public" quiet;
-		droptable casdata="ia_pbo_sales_history" incaslib="public" quiet;	
+		droptable casdata="ia_pbo_sales_history" incaslib="public" quiet;
+		droptable casdata="promo_skelet" incaslib="public" quiet;		
+		droptable casdata="promo_skelet_meat" incaslib="public" quiet;		
 	run;
 
+	/* 	------------ End. Признаки описывающие трафик ресторана ------------- */	
 
-	/****** 9. Признаки описывающие продажи промо товаров ******/
-	/* TODO, может быть группировать мастеркоды в промо по категориям?	 */
+
+	/************************************************************************************
+	 * 9. Признаки описывающие продажи промо товаров									*
+	 ************************************************************************************/
+
 	/* Создаем временные ряды продаж мастеркодов */
 	proc sql;
 		create table nac.pmix_mastercode_sum as
@@ -1209,9 +1206,19 @@ run;
 		;
 	quit;
 
+	/* Если до этого уже был промоут таблицы pmix_mastercode_sum, удалим ее */	
+	proc casutil;
+		droptable casdata="pmix_mastercode_sum" incaslib="public" quiet;
+	run;
+
 	/* 	Выгружаем таблицу в cas */
 	data public.pmix_mastercode_sum;
 		set nac.pmix_mastercode_sum;
+	run;
+
+	/* Промоутим таблицу для сборки скоринговой витрины */
+	proc casutil;
+		promote casdata="pmix_mastercode_sum" incaslib="public" outcaslib="public";
 	run;
 	
 	/* 	Снова создадим таблицу с промо акциями */
@@ -1221,6 +1228,7 @@ run;
 				t1.PROMO_ID,
 				t1.start_dt,
 				t1.end_dt,
+				t3.option_number,
 				t1.promo_mechanics,
 				t3.product_id,
 				t2.pbo_location_id
@@ -1245,6 +1253,7 @@ run;
 			select distinct
 				t1.PROMO_ID,
 				t1.start_dt,
+				t1.option_number,
 				t2.PROD_LVL4_ID,
 				t1.pbo_location_id
 			from
@@ -1263,8 +1272,9 @@ run;
 				t1.promo_id,
 				t1.pbo_location_id,
 				t1.start_dt,
+				t1.option_number,
 				t2.sales_dt,
-				mean(t2.sales_qty) as mean_sales_qty
+				sum(t2.sales_qty) as mean_sales_qty
 			from
 				public.promo_ml2 as t1
 			inner join
@@ -1276,9 +1286,30 @@ run;
 				t1.promo_id,
 				t1.pbo_location_id,
 				t1.start_dt,
+				t1.option_number,
 				t2.sales_dt			
 		;
 	quit;
+
+	/* Берем минимальные продажи из всех option number */
+	proc fedsql sessref=casauto;
+		create table public.promo_ml4{options replace = true} as 
+			select
+				t1.promo_id,
+				t1.pbo_location_id,
+				t1.start_dt,
+				t1.sales_dt,
+				min(t1.mean_sales_qty) as mean_sales_qty
+			from
+				public.promo_ml3 as t1
+			group by
+				t1.promo_id,
+				t1.pbo_location_id,
+				t1.start_dt,
+				t1.sales_dt			
+		;
+	quit;
+	
 	
 	/* 	Считаем агрегаты Промо, ПБО, год, месяц, день недели */
 	proc fedsql sessref=casauto;
@@ -1300,7 +1331,7 @@ run;
 					weekday(t1.sales_dt) as weekday,
 					t1.mean_sales_qty
 				from
-					public.promo_ml3 as t1
+					public.promo_ml4 as t1
 			) as t1
 			group by
 				t1.promo_id,
@@ -1329,7 +1360,7 @@ run;
 					weekday(t1.sales_dt) as weekday,
 					t1.mean_sales_qty
 				from
-					public.promo_ml3 as t1
+					public.promo_ml4 as t1
 			) as t1
 			group by
 				t1.promo_id,
@@ -1352,7 +1383,7 @@ run;
 				mean(t1.mean_sales_qty) as mean_sales_qty,
 				std(t1.mean_sales_qty) as std_sales_qty
 			from 
-				public.promo_ml3 as t1
+				public.promo_ml4 as t1
 			where
 				sales_dt < start_dt
 			group by
@@ -1372,7 +1403,7 @@ run;
 				mean(t1.mean_sales_qty) as mean_sales_qty,
 				std(t1.mean_sales_qty) as std_sales_qty
 			from 
-				public.promo_ml3 as t1
+				public.promo_ml4 as t1
 			where
 				sales_dt < start_dt
 			group by
@@ -1416,35 +1447,26 @@ run;
 		;
 	quit;
 
-	%raws_count(public,na_abt9);
-	
+	/* Удаляем промежуточные таблицы */		
 	proc casutil;
-		droptable casdata="pmix_mastercode_sum" incaslib="public" quiet;
 		droptable casdata="na_abt8" incaslib="public" quiet;
 		droptable casdata="promo_ml2" incaslib="public" quiet;
 		droptable casdata="promo_ml3" incaslib="public" quiet;
+		droptable casdata="promo_ml4" incaslib="public" quiet;
 		droptable casdata="pmix_aggr_smart" incaslib="public" quiet;
 		droptable casdata="pmix_aggr_dump" incaslib="public" quiet;
+		droptable casdata="pmix_basic_aggr_smart" incaslib="public" quiet;
+		droptable casdata="pmix_basic_aggr_dump" incaslib="public" quiet;
 	run;
 
-	/****** 10. Добавление целевой переменной и фильтрации ******/
-		
-	/*
-		TODO:
-			Подумать над фильтрацией с датой открытия, закрытия ресторна. Просто когда мы указываем в промо туле
-			что акция действует на все рестораны, мы распространяем действие этой акции и на уже закрытые рестораны,
-			еще не открытые и т.д.
+	/* 	------------ End. Признаки описывающие продажи промо товаров ------------- */	
 
-		АЛГОРИТМ ФИЛЬТРАЦИИ:
-		
-		0. Убираем временные закрытия
-		1. Удалем пары промо-ресторан, в которых количество пропусков равно количству промо дней
-		2. Обрезаем концы (промо в ресторане закончилось раньше, либо началось позже)
-		3. Заменеям на миссинги значения, которые отклоняются на 2,5 стандартных отклонений от среднего
-		4. Если среднее t_a < 10, то пропуски заменяем нулями, иначе заменяем средним
-	*/
 
-	/* Меняем ID */
+	/************************************************************************************
+	 * 10. Добавление целевой переменной и фильтрации									*
+	 ************************************************************************************/
+		
+	/* Меняем store_id на pbo_location_id */
 	proc sql;
 		create table work.na_calculation_result as
 			select
@@ -1476,11 +1498,9 @@ run;
 		set work.na_calculation_result;
 	run;
 
-	%raws_count(public,na_calculation_result);
-
 	/* Добавляем целевую переменную */
 	proc fedsql sessref=casauto;
-		create table public.na_abt9_1{options replace=true} as
+		create table public.na_abt10{options replace=true} as
 			select
 				t1.*,
 				t3.n_a,
@@ -1504,13 +1524,29 @@ run;
 		;
 	quit;
 
-	%raws_count(public,na_abt9_1);
+	/* Удаляем промежуточные таблицы */		
+	proc casutil;
+		droptable casdata="na_calculation_result" incaslib="public" quiet;
+		droptable casdata="na_abt9" incaslib="public" quiet;
+	run;
 
-	/* Убираем временные закрытия */
+	/* Удаляем промежуточные таблицы */		
+	proc datasets library=work nolist;
+		delete na_calculation_result;
+	run;
+
+	/* 	------------ End. Добавление целевой переменной и фильтрации ------------- */	
+
+
+	/************************************************************************************
+	 * 11. 		Убираем временные закрытия												*
+	 ************************************************************************************/
 	/* 
-		При этом не важно в каком канале закрыт ресторан,
+		Не важно в каком канале закрыт ресторан,
 	 	от любого канала страдает ALL.
 	*/
+
+	/* Загружаем таблицу с временными закрытиями */
 	proc casutil;
 		load data=etl_ia.pbo_close_period(
 			where=(
@@ -1522,11 +1558,11 @@ run;
 
 	/* Убираем эти интервалы из витрины	 */
 	proc fedsql sessref=casauto;
-		create table public.na_abt10{options replace=true} as
+		create table public.na_abt11{options replace=true} as
 			select
 				t1.*
 			from
-				public.na_abt9_1 as t1
+				public.na_abt10 as t1
 			left join
 				public.pbo_close_period as t2
 			on
@@ -1538,7 +1574,18 @@ run;
 		;	
 	quit;
 
-	%raws_count(public,na_abt10);
+	/* Удаляем промежуточные таблицы */		
+	proc casutil;
+		droptable casdata="pbo_close_period" incaslib="public" quiet;
+	run;
+
+	/* 	------------ End. Убираем временные закрытия ------------- */	
+
+
+	/************************************************************************************
+	 * 12. 	Удалем пары промо-ресторан, в которых количество пропусков равно			*
+	 *		 количеству промо дней												        *
+	 ************************************************************************************/
 
 	/* 
 		Пары промо-ресторна, про которые совсем нет информации
@@ -1555,7 +1602,7 @@ run;
 					pbo_location_id,
 					nmiss(n_a) as nmiss
 				from
-					public.na_abt9_1
+					public.na_abt10
 				group by
 					promo_id,
 					pbo_location_id
@@ -1576,11 +1623,11 @@ run;
 
 	/* Убираем такие пары пары промо-ресторан */
 	proc fedsql sessref=casauto;
-		create table public.na_abt11{options replace=true} as
+		create table public.na_abt12{options replace=true} as
 			select
 				t1.*
 			from
-				public.na_abt10 as t1
+				public.na_abt11 as t1
 			left join
 				public.promo_pbo_miss as t2
 			on
@@ -1591,8 +1638,19 @@ run;
 		;	
 	quit;
 
-	%raws_count(public,na_abt11);
+	/* Удаляем промежуточные таблицы */		
+	proc casutil;
+		droptable casdata="promo_pbo_miss" incaslib="public" quiet;
+		droptable casdata="na_abt10" incaslib="public" quiet;
+		droptable casdata="na_abt11" incaslib="public" quiet;
+	run;
 
+	/* 	------------ End. Удалем пары промо-ресторан, в которых одни пропуски ------------- */	
+
+
+	/************************************************************************************
+	 * 13. 	Обрезаем концы (промо в ресторане закончилось раньше, либо началось позже)  *
+	 ************************************************************************************/
 
 	proc fedsql sessref=casauto;
 		/* Определяем концы интрвала */
@@ -1603,7 +1661,7 @@ run;
 				min(sales_dt) as left_side,
 				max(sales_dt) as right_side
 			from
-				public.na_abt11
+				public.na_abt12
 			where
 				n_a is not missing
 			group by
@@ -1612,11 +1670,11 @@ run;
 
 		;
 		/* Удаляем записи за пределами этих интервалов */
-		create table public.na_abt12{option replace=true} as
+		create table public.na_abt13{option replace=true} as
 			select
 				t1.*
 			from
-				public.na_abt11 as t1
+				public.na_abt12 as t1
 			inner join
 				public.ts_edges as t2
 			on
@@ -1628,7 +1686,20 @@ run;
 		;
 	quit;
 
-	%raws_count(public,na_abt12);
+	/* Удаляем промежуточные таблицы */		
+	proc casutil;
+		droptable casdata="ts_edges" incaslib="public" quiet;
+		droptable casdata="na_abt12" incaslib="public" quiet;
+
+	run;
+
+	/* 	------------ End. Обрезаем концы ------------- */	
+
+
+	/************************************************************************************
+	 * 14. Заменеям на миссинги значения, которые отклоняются на 2,5 стандартных 		*
+	 *		отклонений от среднего.													    *
+	 ************************************************************************************/
 
 	/* Уберем выбросы */
 	proc fedsql sessref=casauto;
@@ -1641,13 +1712,13 @@ run;
 				mean(n_a) as mean_n_a,
 				std(t_a) as std_t_a
 			from
-				public.na_abt12
+				public.na_abt13
 			group by
 				promo_id,
 				pbo_location_id
 		;
 		/* Заменяем на миссинги выбросы */
-		create table public.na_abt13{option replace=true} as
+		create table public.na_abt14{option replace=true} as
 			select
 				t1.PBO_LOCATION_ID,
 				PROMO_LIFETIME, 
@@ -1657,22 +1728,6 @@ run;
 				sales_dt, 
 				PROMO_MECHANICS_NAME, 
 				t1.PROMO_ID, 
-				Bundle, 
-				Discount, 
-				EVMSet, 
-				Giftforpurchaseforproduct, 
-				GiftforpurchaseNonProduct, 
-				GiftforpurchaseSampling, 
-				NPPromoSupport, 
-				OtherDiscountforvolume, 
-				Pairs, 
-				Pairsdifferentcategories, 
-				Productlineextension, 
-				ProductnewlaunchLTO, 
-				ProductnewlaunchPermanentinclite, 
-				Productrehitsameproductnolineext, 
-				Temppricereductiondiscount, 
-				Undefined, 
 				WEEK_START, 
 				NUMBER_OF_OPTIONS, 
 				NUMBER_OF_PRODUCTS, 
@@ -1703,7 +1758,7 @@ run;
 				DELIVERY_ID, 
 				DRIVE_THRU_ID, 
 				MCCAFE_TYPE_ID, 
-				PRICE_LEVEL_ID, 
+/* 				PRICE_LEVEL_ID,  */
 				WINDOW_TYPE_ID, 
 				week, 
 				weekday, 
@@ -1735,7 +1790,7 @@ run;
 					else .
 				end) as n_a
 			from
-				public.na_abt12 as t1
+				public.na_abt13 as t1
 			inner join
 				public.na_stat as t2
 			on
@@ -1744,11 +1799,21 @@ run;
 		;
 	quit;
 
-	%raws_count(public,na_abt13);
+	/* Удаляем промежуточные таблицы */		
+	proc casutil;
+		droptable casdata="na_abt13" incaslib="public" quiet;
+	run;
+
+	/* 	------------ End. Заменяем на миссинги выбросы ------------- */	
+
+
+	/************************************************************************************
+	 * 15. Если среднее t_a < 10, то пропуски заменяем нулями, иначе заменяем средним	*
+	 ************************************************************************************/
 
 	/* Если mean t_a < 10 то миссинги заменяем на нули иначе просто средним */
 	proc fedsql sessref=casauto;
-		create table public.na_abt14{option replace=true} as
+		create table public.na_abt15{option replace=true} as
 			select
 				t1.PBO_LOCATION_ID,
 				PROMO_LIFETIME, 
@@ -1758,22 +1823,6 @@ run;
 				sales_dt, 
 				PROMO_MECHANICS_NAME, 
 				t1.PROMO_ID, 
-				Bundle, 
-				Discount, 
-				EVMSet, 
-				Giftforpurchaseforproduct, 
-				GiftforpurchaseNonProduct, 
-				GiftforpurchaseSampling, 
-				NPPromoSupport, 
-				OtherDiscountforvolume, 
-				Pairs, 
-				Pairsdifferentcategories, 
-				Productlineextension, 
-				ProductnewlaunchLTO, 
-				ProductnewlaunchPermanentinclite, 
-				Productrehitsameproductnolineext, 
-				Temppricereductiondiscount, 
-				Undefined, 
 				WEEK_START, 
 				NUMBER_OF_OPTIONS, 
 				NUMBER_OF_PRODUCTS, 
@@ -1804,7 +1853,7 @@ run;
 				DELIVERY_ID, 
 				DRIVE_THRU_ID, 
 				MCCAFE_TYPE_ID, 
-				PRICE_LEVEL_ID, 
+/* 				PRICE_LEVEL_ID,  */
 				WINDOW_TYPE_ID, 
 				week, 
 				weekday, 
@@ -1838,7 +1887,7 @@ run;
 					else n_a
 				end) as n_a
 			from
-				public.na_abt13 as t1
+				public.na_abt14 as t1
 			inner join
 				public.na_stat as t2
 			on
@@ -1847,29 +1896,266 @@ run;
 		;
 	quit;
 
-	%raws_count(public,na_abt14);
+	/* Удаляем промежуточные таблицы */		
+	proc casutil;
+		droptable casdata="na_abt14" incaslib="public" quiet;
+		droptable casdata="na_stat" incaslib="public" quiet;
+
+	run;
+
+	/* 	------------ End. Замена средним или нулём ------------- */	
 
 
-/* 	proc casutil; */
-/* 		droptable casdata="na_abt9" incaslib="public" quiet;	 */
-/* 		promote casdata="na_train" incaslib="public" outcaslib="public"; */
-/* 	run; */
+	/************************************************************************************
+	 * 16. Дополнительная кодировка промо категорий										*
+	 ************************************************************************************/
+	/*
+			Закодируем промо категории через целевую переменную.
+		Для каждой акции усредним n_a (t_a) по всем промо акциям в том
+		же ресторане с той же механикой за прошедший период. Если ресторан новый
+		и у него недостает акций для усреднения, то усредним по всем ресторанам.
+	*/
+
+	/* Удаляем таблицы для скоринга, чтобы заново их запромоутить */		
+	proc casutil;
+		droptable casdata="score_mean_target_variable" incaslib="public" quiet;
+		droptable casdata="score_mean_target_variable_pbo" incaslib="public" quiet;
+	run;
+
+
+	/* Суммируем целевую переменную и считаем количество дней с промо */
+	proc fedsql sessref=casauto;
+		create table casuser.mean_target_variable_pbo{option replace=true} as
+			select
+				t1.promo_id,
+				t1.promo_mechanics_name,
+				t1.pbo_location_id,
+				t2.start_dt,
+				t2.end_dt,
+				sum(t1.n_a) as sum_n_a,
+				sum(t1.t_a) as sum_t_a,
+				count(1) as count_promo_days
+			from
+				public.na_abt15 as t1
+			inner join (
+				select distinct
+					PROMO_ID,
+					start_dt,
+					end_dt,
+					pbo_location_id
+				from
+					public.promo_ml
+			) as t2
+			on
+				t1.pbo_location_id = t2.pbo_location_id and
+				t1.promo_id = t2.promo_id
+			group by
+				t1.promo_id,
+				t1.promo_mechanics_name,
+				t1.pbo_location_id,
+				t2.start_dt,
+				t2.end_dt
+		;
+	quit;
 	
+	/* Суммируем целевую переменную и считаем количество дней с промо без привязки к pbo */
+	proc fedsql sessref=casauto;
+		create table casuser.mean_target_variable{option replace=true} as
+			select
+				t1.promo_id,
+				t1.promo_mechanics_name,
+				t2.start_dt,
+				t2.end_dt,
+				sum(t1.n_a) as sum_n_a,
+				sum(t1.t_a) as sum_t_a,
+				count(1) as count_promo_days
+			from
+				public.na_abt15 as t1
+			inner join (
+				select distinct
+					PROMO_ID,
+					start_dt,
+					end_dt
+				from
+					public.promo_ml
+			) as t2
+			on
+				t1.promo_id = t2.promo_id
+			group by
+				t1.promo_id,
+				t1.promo_mechanics_name,
+				t2.start_dt,
+				t2.end_dt
+		;
+	quit;
+	
+	/* Суммируем целевую переменную и считаем количество дней с промо для */
+	proc fedsql sessref=casauto;
+		create table public.score_mean_target_variable_pbo{option replace=true} as
+			select
+				t1.promo_mechanics_name,
+				t1.pbo_location_id,
+				mean(t1.n_a) as mean_n_a,
+				mean(t1.t_a) as mean_t_a
+			from
+				public.na_abt15 as t1
+			group by
+				t1.promo_mechanics_name,
+				t1.pbo_location_id
+		;
+	quit;
+	
+	/* Суммируем целевую переменную и считаем количество дней с промо без привязки к pbo */
+	proc fedsql sessref=casauto;
+		create table public.score_mean_target_variable{option replace=true} as
+			select
+				t1.promo_mechanics_name,
+				mean(t1.n_a) as mean_n_a,
+				mean(t1.t_a) as mean_t_a
+			from
+				public.na_abt15 as t1
+			group by
+				t1.promo_mechanics_name
+		;
+	quit;
+	
+	/* Джоиним с самой собой, чтобы получить агрегаты за прошедшие акции */
+	proc fedsql sessref=casauto;
+		create table casuser.target_aggr_pbo{option replace=true} as
+			select
+				t1.promo_id,
+				t1.promo_mechanics_name,
+				t1.pbo_location_id,
+				divide(sum(t2.sum_n_a), sum(t2.count_promo_days)) as mean_past_n_a,
+				divide(sum(t2.sum_t_a), sum(t2.count_promo_days)) as mean_past_t_a
+			from
+				casuser.mean_target_variable_pbo as t1
+			inner join
+				casuser.mean_target_variable_pbo as t2
+			on
+				t1.pbo_location_id = t2.pbo_location_id and
+				t1.promo_mechanics_name = t2.promo_mechanics_name and
+				t1.start_dt >= t2.end_dt
+			group by
+				t1.promo_id,
+				t1.promo_mechanics_name,
+				t1.pbo_location_id
+		;
+	quit;
+	
+	/* Джоиним с самой собой, чтобы получить агрегаты за прошедшие акции без привяки к пбо */
+	proc fedsql sessref=casauto;
+		create table casuser.target_aggr{option replace=true} as
+			select
+				t1.promo_id,
+				t1.promo_mechanics_name,
+				divide(sum(t2.sum_n_a), sum(t2.count_promo_days)) as mean_past_n_a,
+				divide(sum(t2.sum_t_a), sum(t2.count_promo_days)) as mean_past_t_a
+			from
+				casuser.mean_target_variable as t1
+			inner join
+				casuser.mean_target_variable as t2
+			on
+				t1.promo_mechanics_name = t2.promo_mechanics_name and
+				t1.start_dt >= t2.end_dt
+			group by
+				t1.promo_id,
+				t1.promo_mechanics_name
+		;
+	quit;
+	
+	/* Добавляем к витрине */
+	proc fedsql sessref=casauto;
+		create table public.na_abt16{option replace=true} as
+			select
+				t1.*,
+				coalesce(t2.mean_past_n_a, t3.mean_past_n_a) as mean_past_n_a,
+				coalesce(t2.mean_past_t_a, t3.mean_past_t_a) as mean_past_t_a
+			from
+				public.na_abt15 as t1
+			left join
+				casuser.target_aggr_pbo as t2
+			on
+				t1.promo_id = t2.promo_id and
+				t1.pbo_location_id = t2.pbo_location_id
+			left join
+				casuser.target_aggr as t3
+			on
+				t1.promo_id = t3.promo_id
+
+		;	
+	quit;
+
+	/* Удаляем промежуточные таблицы */		
+	proc casutil;
+		droptable casdata="na_abt15" incaslib="public" quiet;
+		droptable casdata="mean_target_variable_pbo" incaslib="casuser" quiet;
+		droptable casdata="mean_target_variable" incaslib="casuser" quiet;
+		droptable casdata="target_aggr_pbo" incaslib="casuser" quiet;
+		droptable casdata="target_aggr" incaslib="casuser" quiet;
+	run;
+	
+	/* Сохраняем таблицы для сборки скоринговой витрины */
+	proc casutil;
+		promote casdata="score_mean_target_variable_pbo" incaslib="public" outcaslib="public";
+		promote casdata="score_mean_target_variable" incaslib="public" outcaslib="public";
+	run;
+	
+	/* Дополнительно сохраняем в NAC */
+	data nac.score_mean_target_variable_pbo;
+		set public.score_mean_target_variable_pbo;
+	run;
+	
+	data nac.score_mean_target_variable;
+		set public.score_mean_target_variable;
+	run;
+
+	/* 	------------ End. Дополнительная кодировка промо категорий ------------- */	
+
+
+	/************************************************************************************
+	 * 17. Добавляем погоду																*
+	 ************************************************************************************/
+
+	/* Загружаем таблицу с погодой */
+	proc casutil;
+		load data=etl_ia.weather(
+			where=(
+				&ETL_CURRENT_DTTM. <= valid_to_dttm and
+				&ETL_CURRENT_DTTM. >= valid_from_dttm
+			)
+		) casout='ia_weather' outcaslib='casuser' replace;	
+	run;
+	
+	/* Соединяем с витриной	 */
+	proc fedsql sessref=casauto;
+		create table public.na_abt17{option replace=true} as
+			select
+				t1.*,
+				t2.temperature,
+				t2.precipitation
+			from
+				public.na_abt16 as t1
+			left join
+				casuser.ia_weather as t2
+			on
+				t1.sales_dt = t2.report_dt and
+				t1.pbo_location_id = t2.pbo_location_id
+		;	
+	quit;
+
+	/* Удаляем промежуточные таблицы */		
+	proc casutil;
+		droptable casdata="na_abt16" incaslib="public" quiet;
+		droptable casdata="ia_weather" incaslib="casuser" quiet;
+	run;
+
+	/* 	------------ End. Добавляем погоду ------------- */	
+	
+
 	/* Дополнительно сохраняем витрину в Nac */
-	data nac.na_abt14;
-		set public.na_abt14;
+	data nac.na_abt17;
+		set public.na_abt17;
 	run;
 
 %mend;
-
-%promo_effectiveness_abt_building(
-	promo_lib = casuser, 
-	ia_promo = past_promo,
-	ia_promo_x_pbo = promo_pbo_enh,
-	ia_promo_x_product = promo_prod_enh,
-	hist_start_dt = date '2019-01-01',
-	ia_media = media_enh,
-	filter = t1.channel_cd = 'ALL',
-	calendar_start = '01jan2017'd,
-	calendar_end = '01jan2022'd
-);

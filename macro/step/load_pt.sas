@@ -35,7 +35,7 @@
 			lmvReportDttm
 	;
 	
-	%let mvDatetime=&ETL_CURRENT_DT.;
+	%let mvDatetime=&ETL_CURRENT_DTTM.;
 	%let lmvReportDttm = &ETL_CURRENT_DTTM.;
 
 	%if %sysfunc(SESSFOUND(casauto)) = 0 %then %do; 
@@ -217,11 +217,11 @@
 
 	
 	/*START: LOAD PT_CHANNEL */
-	/* bkp etl_ia.lookup_channel */
+	/* bkp etl_ia.lookup_channel 
 	data pt_bkp.channel_lookup;
 		set etl_ia.channel_lookup;
 	run;
-
+	*/
 	data etl_ia_channel;
 		set etl_ia.channel(where=(valid_from_dttm<=&lmvReportDttm. and valid_to_dttm>=&lmvReportDttm.));
 	run;
@@ -362,14 +362,13 @@
 	
 	/* START PROMO */
 	PROC SQL NOPRINT;	
-		CONNECT TO POSTGRES AS CONN (server="10.252.151.3" port=5452 user=pt password="{SAS002}1D57933958C580064BD3DCA81A33DFB2" database=pt defer=yes readbuff=32767 conopts="UseServerSidePrepare=1;UseDeclareFetch=1;Fetch=8192");
-			/* truncate target table in PT PG schema */
-			EXECUTE BY CONN
+		connect using pt;
+			EXECUTE BY pt
 				(
-					TRUNCATE TABLE public.promo_delta
+					TRUNCATE TABLE public.promo_delta;
 				)
 			;
-			DISCONNECT FROM CONN;
+		DISCONNECT FROM pt;
 	QUIT;
 	
 	proc sql noprint;
@@ -402,20 +401,19 @@
 	run; 
 
 	PROC SQL NOPRINT;	
-		CONNECT TO POSTGRES AS CONN (server="10.252.151.3" port=5452 user=pt password="{SAS002}1D57933958C580064BD3DCA81A33DFB2" database=pt defer=yes readbuff=32767 conopts="UseServerSidePrepare=1;UseDeclareFetch=1;Fetch=8192");
-			/* truncate target table in PT PG schema */
-			EXECUTE BY CONN
+		connect using pt;
+			EXECUTE BY pt
 				(
-				INSERT INTO public.promo(
+					INSERT INTO public.promo(
 					 p_cal_rk, promo_id, promo_nm, promo_start_dttm, promo_end_dttm, promo_comment_txt, promo_status_cd, created_by_nm, creation_dttm, modified_by_nm, modified_dttm)
 					select p_cal_rk, promo_id, promo_nm, promo_start_dttm, promo_end_dttm, promo_comment_txt, promo_status_cd, created_by_nm, creation_dttm, modified_by_nm, modified_dttm
 					from public.promo_delta
 					;
 				)
 			;
-			DISCONNECT FROM CONN;
+		DISCONNECT FROM pt;
 	QUIT;
-		
+	
 	proc sql noprint;
 		create table work.pt_promo as
 			select

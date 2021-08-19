@@ -8,10 +8,19 @@
 	
 	%tech_redirect_log(mpMode=START, mpJobName=rtp_1_load_data_product, mpArea=Main);
 	%tech_log_event(mpMode=START, mpProcess_Nm=rtp_1_load_data_product);
-		%rtp_1_load_data_product(mpMode=A,
+	/*	%rtp_1_load_data_product(mpMode=A,
 					 mpOutTrain=mn_short.all_ml_train,
 					 mpOutScore=mn_short.all_ml_scoring,
-					 mpWorkCaslib=mn_short);
+					 mpWorkCaslib=mn_short);  */
+		%rtp_1_load_data_product(
+					  mpMode		= A
+					, mpRetroLaunch	= N
+					, mpOutTrain	= mn_short.all_ml_train
+					, mpOutScore	= mn_short.all_ml_scoring
+					, mpWorkCaslib	= mn_short
+				);			 
+					 
+					 
 	%tech_redirect_log(mpMode=END, mpJobName=rtp_1_load_data_product, mpArea=Main);
 	%tech_log_event(mpMode=END, mpProcess_Nm=rtp_1_load_data_product);						
 

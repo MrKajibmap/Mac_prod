@@ -422,7 +422,7 @@
 
 
 	/* Для первого месяца */
-	proc casutil;
+/* proc casutil;
 		droptable casdata="&lmvOutTabNamePmixSt._komp1" incaslib="&lmvOutLibrefPmixSt." quiet;
 	quit;
 	
@@ -440,17 +440,15 @@
 	proc casutil;
 			promote casdata="&lmvOutTabNamePmixSt._komp1" incaslib="&lmvOutLibrefPmixSt." outcaslib="&lmvOutLibrefPmixSt.";
 	quit;
+*/
 
-
-	*%dp_export_csv_prod(mpInput=&lmvOutLibrefPmixSt..&lmvOutTabNamePmixSt._komp1
-					, mpPath=&lmvPathOut.);
-	%dp_export_csv(mpInput=&lmvOutLibrefPmixSt..&lmvOutTabNamePmixSt._komp1, mpTHREAD_CNT=1, mpPath=&lmvPathOut.);	
+	/*%dp_export_csv(mpInput=&lmvOutLibrefPmixSt..&lmvOutTabNamePmixSt._komp1, mpTHREAD_CNT=1, mpPath=&lmvPathOut.);	
 	proc casutil;
 		droptable casdata="&lmvOutTabNamePmixSt._komp1" incaslib="&lmvOutLibrefPmixSt." quiet;
 	quit;
-	
+	*/
 	/* Для второго месяца */
-
+/*
 	proc fedsql sessref=casauto;
 		create table &lmvOutLibrefPmixSt..&lmvOutTabNamePmixSt._komp2{options replace=true} as
 		select distinct t1.* 
@@ -466,16 +464,14 @@
 	proc casutil;
 			promote casdata="&lmvOutTabNamePmixSt._komp2" incaslib="&lmvOutLibrefPmixSt." outcaslib="&lmvOutLibrefPmixSt.";
 	quit;
-
-	*%dp_export_csv_prod(mpInput=&lmvOutLibrefPmixSt..&lmvOutTabNamePmixSt._komp2
 					, mpPath=&lmvPathOut.);
 	%dp_export_csv(mpInput=&lmvOutLibrefPmixSt..&lmvOutTabNamePmixSt._komp2, mpTHREAD_CNT=1, mpPath=&lmvPathOut.);		
 	proc casutil;
 		droptable casdata="&lmvOutTabNamePmixSt._komp2" incaslib="&lmvOutLibrefPmixSt." quiet;
 	quit;
-	
+*/	
 	/* Для третьего месяца */
-
+/*
 	proc fedsql sessref=casauto;
 		create table &lmvOutLibrefPmixSt..&lmvOutTabNamePmixSt._komp3{options replace=true} as
 		select distinct t1.* 
@@ -490,15 +486,11 @@
 	proc casutil;
 			promote casdata="&lmvOutTabNamePmixSt._komp3" incaslib="&lmvOutLibrefPmixSt." outcaslib="&lmvOutLibrefPmixSt.";
 	quit;
-
-	*%dp_export_csv_prod(mpInput=&lmvOutLibrefPmixSt..&lmvOutTabNamePmixSt._komp3
-					, mpPath=&lmvPathOut.);
-					
 	%dp_export_csv(mpInput=&lmvOutLibrefPmixSt..&lmvOutTabNamePmixSt._komp3, mpTHREAD_CNT=1, mpPath=&lmvPathOut.);
 	proc casutil;
 		droptable casdata="&lmvOutTabNamePmixSt._komp3" incaslib="&lmvOutLibrefPmixSt." quiet;
 	quit;
-	
+*/
 	
 	proc casutil;
 		droptable casdata="&lmvOutTabNameGcSt._komp" incaslib="&lmvOutLibrefGcSt." quiet;
@@ -512,7 +504,7 @@
 			and intnx('month',t1.DATA,0,'b') = t2.month and t2.KOMP_ATTRIB = 1
 		;
 	quit;	
-
+ 
 	proc casutil;
 			promote casdata="&lmvOutTabNameGcSt._komp" incaslib="&lmvOutLibrefGcSt." outcaslib="&lmvOutLibrefGcSt.";
 	quit;

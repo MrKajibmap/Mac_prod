@@ -41,6 +41,7 @@
 		PromoCalculationRk=&PromoCalculationRk.
 	);
 	
+	/* Список промо для скоринга */
 	proc fedsql sessref=casauto;
 		create table casuser.promo_tool_promo{options replace=true} as
 			select
@@ -54,7 +55,28 @@
 					year(start_dt) < year(&ETL_CURRENT_DT_DB) and
 					year(end_dt) > year(&ETL_CURRENT_DT_DB)
 				)
-			) and channel_cd = 'ALL'
+			) and channel_cd = 'ALL' and FROM_PT = 1
+		;
+	quit;
+	
+	/* Загружаем в CAS таблицу */
+	data casuser.na_calculation_schedule;
+		set nac.na_calculation_schedule;
+	run;
+	
+	/* Оставляем только будущие промо */
+	proc fedsql sessref=casauto;
+		create table casuser.future_promo_tool_promo{options replace=true} as
+			select
+				t1.*
+			from
+				casuser.promo_tool_promo as t1
+			left join
+				(select distinct promo_txt_id from casuser.na_calculation_schedule) as t2
+			on
+				t1.promo_txt_id = t2.promo_txt_id
+			where
+				t2.promo_txt_id is missing
 		;
 	quit;
 	
@@ -63,29 +85,103 @@
 	%include '/opt/sas/mcd_config/macro/step/pt/promo_effectiveness_model_scoring_dev.sas';
 	%scoring_building(
 		promo_lib = casuser, 
-		ia_promo = promo_tool_promo,
+		ia_promo = future_promo_tool_promo,
 		ia_promo_x_pbo = promo_pbo_enh,
 		ia_promo_x_product = promo_prod_enh,
 		ia_media = media_enh,
 		calendar_start = '01jan2017'd,
 		calendar_end = '01jan2022'd
-	);
+	);  /* Заменить подсчитанные таблицы pbo_lvl_all, product_lvl_all на 
+		считаемые на ходу, потому что справочники могут обновится и
+		данные в этих таблицах будут неактуальными */
 	
 	/* Скоринг t_a */
 	%promo_effectivness_predict(
-		model = ta_prediction_model_test,
+		model = ta_prediction_model,
 		target = ta,
 		data = casuser.promo_effectivness_scoring
 	);
 
 	/* Скоринг n_a */
 	%promo_effectivness_predict(
-		model = na_prediction_model_test,
+		model = na_prediction_model,
 		target = na,
 		data = casuser.promo_effectivness_scoring
 	);
 	
+	/* Добавляем фактические значения промо эффективности к прогнозным */
+		
+		/* Дабавляем обычный промо ID */
+		proc fedsql sessref=casauto;
+			create table casuser.na_calculation_schedule_id{options replace=true} as
+				select
+					t2.promo_id,
+					t1.pbo_location_id,
+					t1.sales_dt,
+					t1.n_a,
+					t1.t_a
+				from
+					casuser.na_calculation_schedule as t1
+				inner join
+					casuser.promo_tool_promo as t2
+				on
+					t1.promo_txt_id = t2.promo_txt_id
+			;
+		quit;
 	
+		/* Загружаем в CAS */
+		data casuser.pbo_loc_attributes;
+			set etl_ia.pbo_loc_attributes;
+		run;
+
+		/* Дабавляем обычный pbo_location_id */
+		proc fedsql sessref=casauto;
+			create table casuser.na_calculation_schedule_id2{options replace=true} as
+				select
+					t1.promo_id,
+					t2.pbo_location_id,
+					t1.sales_dt,
+					t1.n_a,
+					t1.t_a
+				from
+					casuser.na_calculation_schedule_id as t1
+				inner join (
+					select distinct
+						PBO_LOCATION_ID,
+						PBO_LOC_ATTR_VALUE
+					from
+						casuser.pbo_loc_attributes
+					where
+						PBO_LOC_ATTR_NM = 'STORE_ID' and
+						&ETL_CURRENT_DTTM. <= valid_to_dttm and
+						&ETL_CURRENT_DTTM. >= valid_from_dttm
+				) as t2 
+				on
+					t1.pbo_location_id = t2.PBO_LOC_ATTR_VALUE
+			;
+		quit;
+
+		/* Таблица для UPT */
+		data work.na_history(rename=(n_a=p_n_a) drop=t_a);
+			set casuser.na_calculation_schedule_id2;
+		run;
+	
+		/* Таблица для GC */
+		data work.ta_history(rename=(t_a=p_t_a) drop=n_a);
+			set casuser.na_calculation_schedule_id2;
+		run;
+				
+		/* Делаем append для GC */
+		proc append base=nac.promo_effectivness_ta_predict
+			data = work.ta_history force;
+		run; 
+		
+		/* Делаем append для UPT */
+		proc append base=nac.promo_effectivness_na_predict
+			data = work.na_history force;
+		run;
+		
+		
 	/*** 4. Разложение GC на промо компоненты ***/
 	%include '/opt/sas/mcd_config/macro/step/pt/gc_model_scoring.sas';
 	/* Собираем скоринговую витрину */
@@ -134,6 +230,9 @@
 	run;
 	
 	proc casutil;
+		droptable casdata="na_calculation_schedule_id" incaslib="casuser" quiet;
+		droptable casdata="na_calculation_schedule_id2" incaslib="casuser" quiet;
+		droptable casdata="pbo_loc_attributes" incaslib="casuser" quiet;
 		droptable casdata="&GcOutTableNm." incaslib="public" quiet;
 		droptable casdata="upt_scoring" incaslib="public" quiet;
 		promote incaslib="casuser" outcaslib="public" casdata="&GcOutTableNm." casout="&GcOutTableNm.";

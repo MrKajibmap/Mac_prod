@@ -160,7 +160,7 @@
 
     proc fedsql sessref=casauto noprint;
         create table CASUSER.PROMO_FILT_SKU_PBO{options replace=true} as
-            select t1.CHANNEL_CD
+            select cast(t1.CHANNEL_CD as CHARACTER) as CHANNEL_CD
                 , t1.PROMO_ID
                 , t1.PROMO_MECHANICS
                 , t3.PRODUCT_ID
@@ -201,9 +201,11 @@
                 on t5.PBO_LOC_ATTR_VALUE = t6.PRICE_AREA_NM
 
             /*фильтрация планируемых или уже идущих промо*/
-            where ((&VF_FC_START_DT. between t1.START_DT and t1.END_DT)
+            where 
+			((&VF_FC_START_DT. between t1.START_DT and t1.END_DT)
                 or (t1.START_DT between &VF_FC_START_DT. and t1.END_DT))
-                and t1.CHANNEL_CD = 'ALL'
+                and 
+				t1.CHANNEL_CD = 'ALL'
 
             group by 1, 2, 3, 4, 5, 6, 7, 8, 9, 10
         ;
@@ -580,9 +582,10 @@
     quit;
 
     data CASUSER.&lmvOutTableName(keep=CHANNEL_CD PROMO_ID PRODUCT_ID PBO_LOCATION_ID START_DT END_DT NET_PRICE_AMT GROSS_PRICE_AMT);
-        format START_DT date9. END_DT date9.;
-        set CASUSER.UNION_MECHANICS_1;
-        
+        length channel_cd $8;
+		format START_DT date9. END_DT date9.;
+        set CASUSER.UNION_MECHANICS_1(rename=(channel_cd=old_channel_cd));
+        channel_cd = substr(old_channel_cd,1,8);
         if INTERSECT_TYPE = 1 then do;
             START_DT = START_DT_PRICE;
             END_DT = END_DT_PRICE;
@@ -606,13 +609,15 @@
 
         if GROSS_PRICE_AMT ne . and VAT ne . then NET_PRICE_AMT = round(divide(GROSS_PRICE_AMT, (1 + divide(VAT, 100))), 0.01);
         else NET_PRICE_AMT = .;
+		
+		where START_DT_PRICE and END_DT_PRICE is not null;
     run;
 
     proc casutil;
         promote casdata="&lmvOutTableName" incaslib="CASUSER" outcaslib="&lmvOutTableCLib";
 		save incaslib="&lmvOutTableCLib." outcaslib="&lmvOutTableCLib." casdata="&lmvOutTableName." casout="&lmvOutTableName..sashdat" replace; 
     run;
-/*
+
 	proc casutil;
         droptable casdata="PROMO_FILT_SKU_PBO" incaslib="CASUSER" quiet;
         droptable casdata="NPPROMOSUP_OUT" incaslib="CASUSER" quiet;
@@ -639,5 +644,5 @@
         droptable casdata="PROMO_PROD_TABLE_1" incaslib="CASUSER" quiet;
         droptable casdata="NPPROMOSUP_OUT_1" incaslib="CASUSER" quiet;
     run;
-*/
+
 %mend price_promo_future;

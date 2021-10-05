@@ -15,6 +15,6 @@
 				DELETE FROM etl_stg.&lmvTable_nm.
 				WHERE
 					etl_extract_id NOT IN (&LAST_UPDATES_STG.)
-			)
+			);
 	QUIT;
 %mend tech_hold_only_top_stg;

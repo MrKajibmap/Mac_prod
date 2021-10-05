@@ -57,7 +57,7 @@
 		from &lmvOutLibrefUptLt..&lmvOutTabNameUptLt. t1
 		inner join casuser.komp_matrix t2
 			on t1.LOCATION = t2.pbo_location_id
-			and t2.non_komp = 1
+			and t1.DATA = t2.month and t2.KOMP_ATTRIB = 0
 		;
 	quit;
 
@@ -82,7 +82,7 @@
 		from &lmvOutLibrefPmixLt..&lmvOutTabNamePmixLt. t1
 		inner join casuser.komp_matrix t2
 			on t1.LOCATION = t2.pbo_location_id
-			and t2.non_komp = 1
+			and t1.DATA = t2.month and t2.KOMP_ATTRIB = 0
 		;
 	quit;
 
@@ -106,7 +106,7 @@
 		from &lmvOutLibrefGcLt..&lmvOutTabNameGcLt. t1
 		inner join casuser.komp_matrix t2
 			on t1.LOCATION = t2.pbo_location_id
-			and t2.non_komp = 1
+			and t1.DATA = t2.month and t2.KOMP_ATTRIB = 0
 		;
 	quit;
 
@@ -126,13 +126,14 @@
 	quit;
 	proc fedsql sessref=casauto;
 		create table &lmvOutCaslib..&lmvOutTabNameUptSt._nonkomp{options replace=true} as
-		select t1.* 
+		select distinct t1.* 
 		from &lmvOutLibrefUptSt..&lmvOutTabNameUptSt. t1
 		inner join casuser.komp_matrix t2
 			on t1.LOCATION = t2.pbo_location_id
-			and t2.non_komp = 1
+			and intnx('month',t1.DATA,0,'b') = t2.month and t2.KOMP_ATTRIB = 0
 		;
 	quit;
+	
 
 	proc casutil;
 			promote casdata="&lmvOutTabNameUptSt._nonkomp" incaslib="&lmvOutCaslib." outcaslib="&lmvOutCaslib.";
@@ -149,9 +150,10 @@
 		from &lmvOutLibrefPmixSt..&lmvOutTabNamePmixSt. t1
 		inner join casuser.komp_matrix t2
 			on t1.LOCATION = t2.pbo_location_id
-			and t2.non_komp = 1
+			and intnx('month',t1.DATA,0,'b') = t2.month and t2.KOMP_ATTRIB = 0
 		;
 	quit;
+
 
 	proc casutil;
 		promote casdata="&lmvOutTabNamePmixSt._nonkomp" incaslib="&lmvOutCaslib." outcaslib="&lmvOutCaslib.";
@@ -168,9 +170,10 @@
 		from &lmvOutLibrefGcSt..&lmvOutTabNameGcSt. t1
 		inner join casuser.komp_matrix t2
 			on t1.LOCATION = t2.pbo_location_id
-			and t2.non_komp = 1
+			and intnx('month',t1.DATA,0,'b') = t2.month and t2.KOMP_ATTRIB = 0
 		;
 	quit;	
+	
 		
 	proc casutil;
 			promote casdata="&lmvOutTabNameGcSt._nonkomp" incaslib="&lmvOutCaslib." outcaslib="&lmvOutCaslib.";
@@ -186,7 +189,7 @@
 		from &lmvOutLibrefUptLt..&lmvOutTabNameUptLt. t1
 		inner join casuser.komp_matrix t2
 			on t1.LOCATION = t2.pbo_location_id
-			and t2.komp = 1
+			and t1.DATA = t2.month and t2.KOMP_ATTRIB = 0
 		;
 	quit;
 
@@ -209,7 +212,7 @@
 		from &lmvOutLibrefPmixLt..&lmvOutTabNamePmixLt. t1
 		inner join casuser.komp_matrix t2
 			on t1.LOCATION = t2.pbo_location_id
-			and t2.komp = 1
+			and t1.DATA = t2.month and t2.KOMP_ATTRIB = 1
 		;
 	quit;
 	data &lmvOutCaslib..&lmvOutTabNamePmixLt._komp (replace=yes);
@@ -230,7 +233,7 @@
 		from &lmvOutLibrefGcLt..&lmvOutTabNameGcLt. t1
 		inner join casuser.komp_matrix t2
 			on t1.LOCATION = t2.pbo_location_id
-			and t2.komp = 1
+			and t1.DATA = t2.month and t2.KOMP_ATTRIB = 1
 		;
 	quit;
 
@@ -252,7 +255,7 @@
 		from &lmvOutLibrefUptSt..&lmvOutTabNameUptSt. t1
 		inner join casuser.komp_matrix t2
 			on t1.LOCATION = t2.pbo_location_id
-			and t2.komp = 1
+			and t1.DATA = t2.month and t2.KOMP_ATTRIB = 1
 		;
 	quit;
 	proc casutil;
@@ -268,10 +271,11 @@
 		select t1.* 
 		from &lmvOutLibrefPmixSt..&lmvOutTabNamePmixSt. t1
 		inner join casuser.komp_matrix t2
-			on t1.LOCATION = t2.pbo_location_id
-			and t2.komp = 1
+				on t1.LOCATION = t2.pbo_location_id
+			and intnx('month',t1.DATA,0,'b') = t2.month and t2.KOMP_ATTRIB = 1
 		;
 	quit;
+	
 	proc casutil;
 			promote casdata="&lmvOutTabNamePmixSt._komp" incaslib="&lmvOutCaslib." outcaslib="&lmvOutCaslib.";
 			save incaslib="&lmvOutCaslib." outcaslib="&lmvOutCaslib." casdata="&lmvOutTabNamePmixSt._komp" casout="&lmvOutTabNamePmixSt._komp.sashdat" replace;
@@ -286,10 +290,10 @@
 		from &lmvOutLibrefGcSt..&lmvOutTabNameGcSt. t1
 		inner join casuser.komp_matrix t2
 			on t1.LOCATION = t2.pbo_location_id
-			and t2.komp = 1
+			and intnx('month',t1.DATA,0,'b') = t2.month and t2.KOMP_ATTRIB = 1
 		;
 	quit;	
-
+ 
 	proc casutil;
 		promote casdata="&lmvOutTabNameGcSt._komp" incaslib="&lmvOutCaslib." outcaslib="&lmvOutCaslib.";
 		save incaslib="&lmvOutCaslib." outcaslib="&lmvOutCaslib." casdata="&lmvOutTabNameGcSt._komp" casout="&lmvOutTabNameGcSt._komp.sashdat" replace;

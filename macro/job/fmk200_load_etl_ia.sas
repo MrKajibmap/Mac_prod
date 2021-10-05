@@ -7,7 +7,8 @@
 	
 	%tech_update_resource_status(mpStatus=P, mpResource=STG_&lmvResource.);
 	
-	%fmk_load_etl_ia(mpResource=&lmvResource);
+	/* %fmk_load_etl_ia(mpResource=&lmvResource); */
+	%fmk_load_etl_ia_pg(mpResource=&lmvResource);
 	
 	%tech_update_resource_status(mpStatus=L, mpResource=STG_&lmvResource.);
 	

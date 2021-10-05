@@ -47,20 +47,21 @@
 			NECESSARY_AMOUNT
 			Breakfast
 			ColdDrinks
-			Condiments
+/* 			Condiments только одна акция на эту категорию товаров, плохой признак */
 			Desserts
 			Fries
 			HotDrinks
-			McCafe
-			Nonproduct
+/* 			McCafe константное значение */ 
+/* 			Nonproduct  константное значение */
 			Nuggets
 			SNCORE
 			SNEDAP
 			SNPREMIUM
-			Shakes
+/* 			Shakes всего два промо имеют ненулевое значение */
 			StartersSalad
-			UndefinedProductGroup
-			ValueMeal
+/* 			UndefinedProductGroup только одна акция на эту категорию товаров, плохой признак */
+			np_gift_price_amt /* 83% миссингов */
+/* 			ValueMeal константное значение */
 			week
 			weekday
 			month
@@ -71,12 +72,15 @@
 			std_sales_qty
 			mean_past_&target.
 			temperature
-			precipitation
+/* 			precipitation  Есть выбросы, когда осадки больше 100 мм в день */
 				/ level = interval;
 		input
-			promo_group_id
+/* 			promo_group_id не понятно, стоит ли использовать этот признак 
+							надо отдельно с ним и без него провести эксперимент */			
 			promo_mechanics_name
-		/* 	pbo_location_id */
+		/* 	pbo_location_id я бы хотел включить этот признак в модель, но есть ощущение
+							что переменная с таким количеством принимаемых значений
+							не может быть обработана в SAS */
 			AGREEMENT_TYPE_ID
 			BREAKFAST_ID
 			BUILDING_TYPE_ID
@@ -90,10 +94,9 @@
 			weekend_flag
 			Christmas_Day
 			Day_After_New_Year
-			New_Year_shift
 			New_year
 			 / level = nominal;
-		id promo_id pbo_location_id sales_dt;
+		id hybrid_promo_id pbo_location_id sales_dt;
 		target &target. / level = interval;
 		savestate rstore=public.&output.;
 		;

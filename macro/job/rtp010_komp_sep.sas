@@ -53,6 +53,7 @@
 	%tech_open_resource(mpResource=LOAD_COMP_UPT_MONTH_FORC);
 	%tech_open_resource(mpResource=LOAD_GC_FACT_LAST_YEAR);
 	%tech_open_resource(mpResource=hlvl_report);
+	%tech_open_resource(mpResource=load_fact_gc_last_year);
 	%tech_open_resource(mpResource=LOAD_COMP_SALE_DAY);
 	%tech_open_resource(mpResource=LOAD_COMP_GC_DAY_FORECST);
 	

@@ -67,15 +67,25 @@
 			, coalesce(t12.pbo_location_nm,'NA') as lvl2_nm
 			, cast(inputn(t3.A_OPEN_DATE,'ddmmyy10.') as date) as A_OPEN_DATE
 			, cast(inputn(t3.A_CLOSE_DATE,'ddmmyy10.') as date) as A_CLOSE_DATE
-			, t3.A_PRICE_LEVEL
-			, t3.A_DELIVERY
 			, t3.A_AGREEMENT_TYPE
 			, t3.A_BREAKFAST
 			, t3.A_BUILDING_TYPE
 			, t3.A_COMPANY
+			, t3.A_DELIVERY
+			, t3.A_DELIVERY_OPEN_DATE
 			, t3.A_DRIVE_THRU
+			, t3.A_LATITUDE
+			, t3.A_LONGITUDE
+			, t3.A_MCCAFE_OPEN_DATE
 			, t3.A_MCCAFE_TYPE
+			, t3.A_OPS_CONSULTANT
+			, t3.A_OPS_DIRECTOR
+			, t3.A_OPS_MANAGER
+			, t3.A_PRICE_AREA_NAME
+			, t3.A_PRICE_LEVEL
+			, t3.A_STORE_ID
 			, t3.A_WINDOW_TYPE
+
 		from casuser.pbo_hier_flat t2
 	
 		left join casuser.attr_transposed t3
@@ -93,13 +103,13 @@
 	quit;
 
 	/* Clear CAS */
-	proc casutil incaslib="CASUSER" ;
-		droptable casdata = "attr_transposed" quiet;
-		droptable casdata = "pbo_hier_flat" quiet;
-		droptable casdata = "pbo_loc_attr" quiet;
-		droptable casdata = "PBO_LOC_HIERARCHY" quiet;
-		droptable casdata = "PBO_LOCATION" quiet;
-		droptable casdata = "PBO_LOC_ATTRIBUTES" quiet;
-	run;
+/* 	proc casutil incaslib="CASUSER" ; */
+/* 		droptable casdata = "attr_transposed" quiet; */
+/* 		droptable casdata = "pbo_hier_flat" quiet; */
+/* 		droptable casdata = "pbo_loc_attr" quiet; */
+/* 		droptable casdata = "PBO_LOC_HIERARCHY" quiet; */
+/* 		droptable casdata = "PBO_LOCATION" quiet; */
+/* 		droptable casdata = "PBO_LOC_ATTRIBUTES" quiet; */
+/* 	run; */
 
 %mend data_prep_pbo;

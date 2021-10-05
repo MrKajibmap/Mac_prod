@@ -158,8 +158,8 @@
 	proc cas;
 	timeData.timeSeries result =r /
 		series={
-			{name="sum_qty", setmiss="MISSING"},
-		/*	{name="GROSS_PRICE_AMT", setmiss="PREV"} */
+			  {name="sum_qty", setmiss="MISSING"}
+		/*  , {name="GROSS_PRICE_AMT", setmiss="PREV"} */
 		}
 		tEnd= "&fc_end"
 		table={
@@ -174,6 +174,10 @@
 		;
 	run;
 	quit;
+	
+	proc casutil;
+		droptable casdata="abt1_ml" incaslib="casuser" quiet;
+	run;
 
 /* ------------ End. Протяжка временных рядов до окончания периода прогноза ------- */
 
@@ -203,7 +207,7 @@
 			from																		
 				CASUSER.ABT2_ML as abt 
 			left join											
-				&lmvWorkCaslib..PRICE_ML as pr				
+				mn_dict.price_full_sku_pbo_day as pr				
 					on	abt.pbo_location_id = pr.pbo_location_id
 					and abt.product_id 		= pr.product_id
 					and abt.sales_dt 		= pr.period_dt
@@ -214,6 +218,10 @@
 	proc casutil;
     	droptable casdata="price_full_sku_pbo_day" incaslib="mn_dict" quiet;
   	quit;
+	
+	proc casutil;
+		droptable casdata="abt2_ml" incaslib="casuser" quiet;
+	run;
 
 
 /* ------------ End. Добавляем цены из справочника цен ---------------------------- */
@@ -320,7 +328,8 @@
 		casuser.chain_miss_sku
 		casuser.chain_miss_loc
 		;
-		set casuser.product_chain_enh;
+		/* set casuser.product_chain_enh; */
+		set mn_dict.product_chain;
 		if successor_dim2_id = . then 
 			output casuser.chain_miss_loc;
 		else if successor_product_id  = . then 
@@ -503,8 +512,8 @@
 /* ------------ Start. Очистка CAS-cash от промежуточных таблиц -------------------- */	
 	
 	proc casutil;
-		droptable casdata="abt1_ml" incaslib="casuser" quiet;
-		droptable casdata="abt2_ml" incaslib="casuser" quiet;
+*		droptable casdata="abt1_ml" incaslib="casuser" quiet;
+*		droptable casdata="abt2_ml" incaslib="casuser" quiet;
 		droptable casdata="abt3_ml" incaslib="casuser" quiet;
 		droptable casdata="abt4_ml_train_1" incaslib="casuser" quiet;
 		droptable casdata="abt4_ml_train_2" incaslib="casuser" quiet;
@@ -2057,7 +2066,7 @@
 			from
 				casuser.abt15_ml as t1
 		;
-	quit;ы
+	quit;
 /* ------------ End. Оставляем необходимые поля в витрине -------------------------- */
 
 

@@ -415,7 +415,7 @@
 
 	data casuser.promo_mech_transformation;
 		length old_mechanic new_mechanic $50;
-		infile "&RTP_PROMO_MECH_TRANSF_FILE." dsd firstobs=2;                 
+		infile "&RTP_PROMO_MECH_TRANSF_FILE." dsd firstobs=2 delimiter=';';                 
 		input old_mechanic $ new_mechanic $;                            
 	run;
 	

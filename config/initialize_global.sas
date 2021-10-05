@@ -125,7 +125,7 @@
 %let VF_PBO_PROJ_NM					= nm_abt_pbo;
 %let VF_GC_NM						= mn_gc_shortterm;
 %let VF_PBO_NM						= mn_pbo_shortterm;
-%let SYS_ADM_USER					= ru-nborzunov;
+%let SYS_ADM_USER					= ru-pkonakov;
 
 %let RTP_TRAIN_FLG_PMIX				= N;
 %let RTP_TRAIN_FLG_MC				= N;
@@ -152,11 +152,11 @@ options
    fmtsearch      =  (FORMATS WORK ETL_FMT)
    cmplib         =  ETL_FMT.fcmp
    compress       =  binary
-   mprint
+   /*mprint*/
    mprintnest
    mlogic
    mlogicnest
-   symbolgen
+   /*symbolgen*/
    mrecall
    source
    source2

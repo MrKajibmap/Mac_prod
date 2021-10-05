@@ -1176,6 +1176,8 @@
 		set casuser.lvl5 casuser.lvl4 casuser.lvl3 casuser.lvl2 casuser.lvl1;
 	run;
 	
+	/* Привидение всех промо-механик к одному виду в соотв. с таблицей  &RTP_PROMO_MECH_TRANSF_FILE.*/
+	
 	/* Добавляем к таблице промо ПБО и товары */
 	proc fedsql sessref = casauto;
 		create table casuser.ia_promo_x_pbo_leaf{options replace = true} as 
@@ -1207,7 +1209,9 @@
 				datepart(t1.END_DT) as end_dt,
 				t1.CHANNEL_CD,
 				t1.promo_group_id,
-				compress(promo_mechanics,'', 'ak') as promo_mechanics_name,
+				/* Привидение всех промо-механик к одному виду в соотв. с таблицей  &RTP_PROMO_MECH_TRANSF_FILE.*/
+				/* compress(promo_mechanics,'', 'ak') as promo_mechanics_name,*/
+				t4.new_mechanic as promo_mechanics_name,
 				1 as promo_flag		
 			from
 				/*&lmvInCaslib..promo_enh as t1*/
@@ -1220,6 +1224,10 @@
 				casuser.ia_promo_x_product_leaf as t3
 			on
 				t1.PROMO_ID = t3.PROMO_ID 
+			/* Привидение всех промо-механик к одному виду в соотв. с таблицей  &RTP_PROMO_MECH_TRANSF_FILE.*/
+			inner join 
+				mn_short.promo_mech_transformation as t4
+			on t1.promo_mechanics = t4.old_mechanic 
 		;
 	quit;
 
@@ -1283,15 +1291,47 @@
 				t1.promo_id = t2.promo_id
 		;
 	quit;
-
 	
+	data _null_;
+		set mn_short.promo_mech_transformation end=end;
+		length sql_list sql_sum_list sql_coalesce_list sql_list_def $1000;
+		retain sql_list sql_sum_list sql_coalesce_list sql_list_def;
+		by new_mechanic;
+
+		if _n_ = 1 then do;
+			sql_list = cats('t1.', new_mechanic);
+			sql_sum_list = cat('sum(coalesce(t2.', strip(new_mechanic), ',0 )) as ', strip(new_mechanic));
+			sql_coalesce_list = cat('coalesce(t2.', strip(new_mechanic), ',0 ) as ', strip(new_mechanic));
+			sql_list_def = cat(strip(new_mechanic), ' ' );
+		end;
+		else if first.new_mechanic then do;
+			sql_list = cats(sql_list, ', t1.', new_mechanic);
+			sql_sum_list = cat(strip(sql_sum_list), ', sum(coalesce(t2.', strip(new_mechanic), ', 0)) as ', strip(new_mechanic));
+			sql_coalesce_list = cat(strip(sql_coalesce_list), ', coalesce(t2.', strip(new_mechanic), ', 0) as ', strip(new_mechanic));
+			sql_list_def = cat(strip(sql_list_def),' ', strip(new_mechanic));
+		end;
+
+		if end then do;
+			call symputx('promo_list_sql', sql_list, 'G');
+			call symputx('promo_list_sql_sum', sql_sum_list, 'G');
+			call symputx('promo_list_coalesce', sql_coalesce_list, 'G');
+			call symputx('promo_list', sql_list_def, 'G');
+		end;
+	run;
+%put &=promo_list_sql_sum;
+%put &=promo_list_sql;
+%put &=promo_list_coalesce;
+%put &=promo_list;
+
+
 	/* Считаем кол-во сработавших промо в рамках всех каналов */
 	proc fedsql sessref=casauto;
 		create table casuser.promo_aggr{options replace=true} as
 			select
-				t1.week,
-				t1.pbo_location_id,
-				t1.product_id,
+				t2.week,
+				t2.pbo_location_id,
+				t2.product_id,
+				/*
 				sum(t1.BOGO) as BOGO,
 				sum(t1.Bundle) as Bundle,
 				sum(t1.Discount) as Discount,
@@ -1310,12 +1350,14 @@
 				sum(t1.Productrehitsameproductnolineext) as Productrehitsameproductnolineext,
 				sum(t1.Temppricereductiondiscount) as Temppricereductiondiscount,
 				sum(t1.Undefined) as Undefined
+				*/
+				&promo_list_sql_sum.
 			from
-				casuser.promo_ml_daily_one_hot as t1
+				casuser.promo_ml_daily_one_hot as t2
 			group by
-				t1.week,
-				t1.pbo_location_id,
-				t1.product_id
+				t2.week,
+				t2.pbo_location_id,
+				t2.product_id
 		;
 	quit;
 	
@@ -1353,6 +1395,7 @@
 				t1.CPI,
 				t1.GPD,
 				t1.RDI,
+				/*
 				coalesce(t2.BOGO, 0) as BOGO,
 				coalesce(t2.Bundle, 0) as Bundle,
 				coalesce(t2.Discount, 0) as Discount, 
@@ -1371,6 +1414,8 @@
 				coalesce(t2.Productrehitsameproductnolineext, 0) as Productrehitsameproductnolineext,
 				coalesce(t2.Temppricereductiondiscount, 0) as Temppricereductiondiscount,
 				coalesce(t2.Undefined, 0) as Undefined
+				*/
+				&promo_list_coalesce.
 		from
 			casuser.new_product_abt6 as t1
 		left join
@@ -1466,6 +1511,7 @@
 				t1.CPI,
 				t1.GPD,
 				t1.RDI,
+				/*
 				t1.BOGO,
 				t1.Bundle,
 				t1.Discount,
@@ -1484,7 +1530,9 @@
 				t1.Productrehitsameproductnolineext,
 				t1.Temppricereductiondiscount,
 				t1.Undefined,
-				t2.PRECIPITATION,
+				*/
+				&promo_list_sql.
+				,t2.PRECIPITATION,
 				t2.TEMPERATURE
 		from
 			casuser.new_product_abt7 as t1
@@ -1565,6 +1613,7 @@
 				t1.CPI,
 				t1.GPD,
 				t1.RDI,
+				/*
 				t1.BOGO,
 				t1.Bundle,
 				t1.Discount,
@@ -1583,7 +1632,9 @@
 				t1.Productrehitsameproductnolineext,
 				t1.Temppricereductiondiscount,
 				t1.Undefined,
-				t1.PRECIPITATION,
+				*/
+				&promo_list_sql.
+				,t1.PRECIPITATION,
 				t1.TEMPERATURE,
 				coalesce(t2.comp_trp_BK, 0) as comp_trp_BK,
 				coalesce(t2.comp_trp_KFC, 0) as comp_trp_KFC
@@ -1726,6 +1777,7 @@
 				t1.CPI,
 				t1.GPD,
 				t1.RDI,
+				/*
 				t1.BOGO,
 				t1.Bundle,
 				t1.Discount,
@@ -1744,6 +1796,8 @@
 				t1.Productrehitsameproductnolineext,
 				t1.Temppricereductiondiscount,
 				t1.Undefined,
+				*/
+				&promo_list_sql.,
 				t1.PRECIPITATION,
 				t1.TEMPERATURE,
 				t1.comp_trp_BK,
@@ -1879,6 +1933,7 @@
 				t1.CPI,
 				t1.GPD,
 				t1.RDI,
+				/*
 				t1.BOGO,
 				t1.Bundle,
 				t1.Discount,
@@ -1897,6 +1952,8 @@
 				t1.Productrehitsameproductnolineext,
 				t1.Temppricereductiondiscount,
 				t1.Undefined,
+				*/
+				&promo_list_sql.,
 				t1.PRECIPITATION,
 				t1.TEMPERATURE,
 				t1.comp_trp_BK,
@@ -2107,6 +2164,7 @@
 				t1.CPI,
 				t1.GPD,
 				t1.RDI,
+				/*
 				t1.BOGO,
 				t1.Bundle,
 				t1.Discount,
@@ -2125,6 +2183,8 @@
 				t1.Productrehitsameproductnolineext,
 				t1.Temppricereductiondiscount,
 				t1.Undefined,
+				*/
+				&promo_list_sql.,
 				t1.PRECIPITATION,
 				t1.TEMPERATURE,
 				t1.comp_trp_BK,
@@ -2221,6 +2281,7 @@
 			CPI
 			GPD
 			RDI
+			/*
 			BOGO
 			Bundle
 			Discount
@@ -2239,6 +2300,8 @@
 			Productrehitsameproductnolineext
 			Temppricereductiondiscount
 			Undefined
+			*/
+			&promo_list.
 			PRECIPITATION
 			TEMPERATURE
 			comp_trp_BK

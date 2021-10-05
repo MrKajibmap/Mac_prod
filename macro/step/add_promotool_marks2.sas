@@ -76,21 +76,21 @@
 				datepart(promo_start_dttm) as start_dt,
 				datepart(promo_end_dttm) as end_dt
 			from &lmvOutCaslib..PT_PROMO
-			where upcase(trim(promo_status_cd))='APPROVED'
+			where (upcase(trim(promo_status_cd))='APPROVED' or upcase(trim(promo_status_cd))='SUBMITTED')
 				or (p_cal_rk=&mvPCalRk and upcase(trim(promo_status_cd))='DRAFT');
 		  quit;
       %end;
 	%end;
 	%if %length(&PromoCalculationRk)=0 or %length(&mvPCalRk)=0 %then %do;
-	proc fedsql sessref=casauto;
-		create table &lmvOutCaslib..pt_promo1{options replace=true} as
-			select 
-			promo_rk,p_cal_rk,trim(promo_id) as promo_id,promo_nm,
-			datepart(promo_start_dttm) as start_dt,
-			datepart(promo_end_dttm) as end_dt
-		from &lmvOutCaslib..PT_PROMO
-		where upcase(trim(promo_status_cd))='APPROVED';
-	quit;
+		proc fedsql sessref=casauto;
+			create table &lmvOutCaslib..pt_promo1{options replace=true} as
+				select 
+				promo_rk,p_cal_rk,trim(promo_id) as promo_id,promo_nm,
+				datepart(promo_start_dttm) as start_dt,
+				datepart(promo_end_dttm) as end_dt
+			from &lmvOutCaslib..PT_PROMO
+			where upcase(trim(promo_status_cd))='APPROVED';
+		quit;
 	%end;
 /*==============================*/
 
@@ -103,12 +103,12 @@
 	   casout={name="pt_detail_transposed", caslib="&lmvOutCaslib", replace=true};
 	quit;
 	
-	/* Загрузка Промо */
+	/* �������� ����� */
 	data &lmvOutCaslib..promo (replace=yes  drop=valid_from_dttm valid_to_dttm);
 		set &lmvInLib..promo(where=(valid_to_dttm>=&lmvReportDttm.));
 	run;
 	
-	/* создать числовые promo_id для promo_id вида 78b61716-af8e-4deb-97e2-1f79e74c7118 */
+	/* ������� �������� promo_id ��� promo_id ���� 78b61716-af8e-4deb-97e2-1f79e74c7118 */
 	proc fedsql sessref=casauto;
 		create table &lmvOutCaslib..promo_id_exp{options replace=true} as
 		select 
@@ -125,7 +125,7 @@
 		&lmvOutCaslib..promo;
 	quit;
 	
-	/* START: Блок для сортировки полученных после интеграции с ПТ промо акций для обеспечения воспроизводимости результата */
+	/* START: ���� ��� ���������� ���������� ����� ���������� � �� ����� ����� ��� ����������� ����������������� ���������� */
 	proc sql noprint;
 		create table work.promo_id_exp_sorted as
 		select * from &lmvOutCaslib..promo_id_exp
@@ -143,7 +143,7 @@
 	data &lmvOutCaslib..promo_id_map(replace=yes);
 		set  work.promo_id_map;
 	run;
-	/* END: Блок для сортировки полученных после интеграции с ПТ промо акций для обеспечения воспроизводимости результата */
+	/* END: ���� ��� ���������� ���������� ����� ���������� � �� ����� ����� ��� ����������� ����������������� ���������� */
 	
 	/*
 	data &lmvOutCaslib..promo_id_map /sessref="casauto" single=yes;;
@@ -153,11 +153,12 @@
 		promo_id_num=max_promo_id+9999+_n_;
 	run;
 	*/
-	/*таблица в разрезе промо-акций*/
+	/*������� � ������� �����-�����*/
 	proc fedsql sessref=casauto;
 		create table &lmvOutCaslib..pt_promo2{options replace=true} as
 		select 
 		t1.promo_rk,t1.p_cal_rk,
+		t1.promo_id as promo_txt_id,
 		mp.promo_id_num as promo_id,
 		t1.promo_nm,
 		t1.start_dt,t1.end_dt,
@@ -181,7 +182,7 @@
 		;
 	quit;
 
-	/*таблица в разрезе иерархии промо-акции*/
+	/*������� � ������� �������� �����-�����*/
 	proc fedsql sessref=casauto;
 		create table &lmvOutCaslib..pt_promo3{options replace=true} as
 		select t1.promo_id,t1.promo_rk,
@@ -194,7 +195,7 @@
 	;
 	quit;
 
-	/*разрезаем таблицу с иерархиями отдельно на ПБО, сегмент и канал*/
+	/*��������� ������� � ���������� �������� �� ���, ������� � �����*/
 	proc fedsql sessref=casauto;
 		create table &lmvOutCaslib..promopbo_app{options replace=true} as
 		select distinct promo_id,pbo_location_id
@@ -211,7 +212,7 @@
 		set &lmvInLib..media(where=(valid_to_dttm>=&lmvReportDttm.));
 	run;
 	
-	/*нужны отдельные ID для promo_group_id, через которую идёт мэппинг с media*/
+	/*����� ��������� ID ��� promo_group_id, ����� ������� ��� ������� � media*/
 	proc fedsql sessref=casauto;
 		create table &lmvOutCaslib..max_promo_group_id{options replace=true} as
 		select max(promo_group_id) as max_promo_group_id from
@@ -231,7 +232,7 @@
 		promo_group_id_num=max_promo_group_id+8888+_n_;
 	run;
 
-	/*подготовка для добавления trp в разрезе недель*/
+	/*���������� ��� ���������� trp � ������� ������*/
 	data &lmvOutCaslib..media_app;
 		set &lmvOutCaslib..promo_group_id_map ;
 		format period_dt date9.;
@@ -246,7 +247,7 @@
 		end;
 	run;
 
-	/*К товарам нужно подтянуть цены, позиции, флаг подарка*/
+	/*� ������� ����� ��������� ����, �������, ���� �������*/
 	proc fedsql sessref=casauto;
 		create table &lmvOutCaslib..promo_detail_spl{options replace=true} as
 		select distinct t1.promo_rk,t2.promo_id,promo_dtl_cd,promo_dtl_vle,
@@ -285,11 +286,11 @@
 		;
 	quit;
 
-	/*добавить channel+segment+promo_group_id*/
+	/*�������� channel+segment+promo_group_id*/
 	proc fedsql sessref=casauto;
 		create table &lmvOutCaslib..pt_promo2ext{options replace=true} as
 		select 
-		t1.promo_rk,t1.p_cal_rk,
+		t1.promo_rk,t1.p_cal_rk,t1.promo_txt_id,
 		t1.promo_id as promo_id,
 		t1.promo_nm,
 		t1.start_dt,t1.end_dt,
@@ -317,7 +318,7 @@
 		;
 	quit;
 
-	/*мэппинг casuser.PROMO*/
+	/*������� casuser.PROMO*/
 	proc fedsql sessref=casauto;
 		create table &lmvOutCaslib..promo_enh{options replace=true} as
 		select 
@@ -333,7 +334,8 @@
 		coalesce(t1.np_gift_price_amt,t2.mechanicsExpertReview) as np_gift_price_amt,
 		coalesce(t1.platform,t2.platform) as platform,
 		coalesce(t1.location_based_pricing,t2.location_based_pricing) as location_based_pricing,
-		case when t2.promo_id is not null then 1 else 0 end as from_pt
+		case when t2.promo_id is not null then 1 else 0 end as from_pt,
+		t2.promo_txt_id
 		from &lmvOutCaslib..promo t1 full outer join &lmvOutCaslib..pt_promo2ext t2
 		on t1.promo_id=t2.promo_id
 		;
@@ -347,7 +349,7 @@
 		set &lmvInLib..promo_x_product(where=(valid_to_dttm>=&lmvReportDttm.));
 	run;
 	
-	/*мэппинг casuser.PROMO_PBO*/
+	/*������� casuser.PROMO_PBO*/
 	proc fedsql sessref=casauto;
 		create table &lmvOutCaslib..promo_pbo_enh{options replace=true} as
 		select 
@@ -358,7 +360,7 @@
 		;
 	quit;
 
-	/*мэппинг casuser.PROMO_PROD*/
+	/*������� casuser.PROMO_PROD*/
 	proc fedsql sessref=casauto;
 		create table &lmvOutCaslib..promo_prod_enh{options replace=true} as
 		select 
@@ -373,12 +375,12 @@
 		;
 	quit;
 
-	/*мэппинг casuser.media*/
+	/*������� casuser.media*/
 	proc fedsql sessref=casauto;
 		create table &lmvOutCaslib..media_enh{options replace=true} as
 		select 
 		coalesce(t1.promo_group_id,t2.promo_group_id_num) as promo_group_id,
-		/* Изменено наименование поля на report_dt с period_dt */
+		/* �������� ������������ ���� �� report_dt � period_dt */
 		coalesce(t1.period_dt,t2.period_dt) as report_dt,
 		coalesce(t1.trp,t2.MARKETINGTRP) as trp
 		from &lmvOutCaslib..media t1 full outer join &lmvOutCaslib..media_app t2
@@ -386,7 +388,7 @@
 		;
 	quit;
 
-	/*мэппинг casuser.product_chain - добавляем делистинги*/
+	/*������� casuser.product_chain - ��������� ����������*/
 
 	/*pbo_location_id - to leaf level!*/
 	
@@ -454,15 +456,15 @@
 		where t1.mechanicstype ='Delisting';
 	quit;
 
-	/* Временная подмена таблицы product_chain */
+	/* ��������� ������� ������� product_chain */
 	/* %load_plm(mpOutput = mn_dict.product_chain)*/
 	/*%load_product_chain(mpOutput = mn_dict.product_chain);*/
 	
 	data &lmvOutCaslib..product_chain1;
-		/* Временная подмена таблицы product_chain */
+		/* ��������� ������� ������� product_chain */
 		/* set &lmvInLib..PRODUCT_CHAIN; */
 		set mn_dict.product_chain;
-		/* where valid_to_dttm>=&lmvReportDttm.; применяем усл для версионирования*/
+		/* where valid_to_dttm>=&lmvReportDttm.; ��������� ��� ��� ���������������*/
 	run;
 
 	data &lmvOutCaslib..product_chain_add2;
@@ -474,7 +476,7 @@
 	/*list of promo products*/
 	data &lmvOutCaslib..product_attr1;
 		set &lmvInLib..PRODUCT_ATTRIBUTES;
-		where valid_to_dttm>=&lmvReportDttm.; /*применяем усл для версионирования*/
+		where valid_to_dttm>=&lmvReportDttm.; /*��������� ��� ��� ���������������*/
 	run;
 
 	proc fedsql sessref=casauto;
@@ -484,7 +486,7 @@
 		where product_attr_nm='REGULAR_ID' and product_attr_value is not null 
 			and product_id ^= inputn(product_attr_value,'8.');
 	quit;
-/*Для этого набора промо-механик новинки заводятся только для промо-товаров из списка*/
+/*��� ����� ������ �����-������� ������� ��������� ������ ��� �����-������� �� ������*/
 	proc fedsql sessref=casauto;
 		create table &lmvOutCaslib..promo_prod_intersect{options replace=true} as
 		select distinct t2.product_id as successor_product_id,
@@ -510,7 +512,7 @@
 			) and t3.from_pt=1; /*process only lifecycle from promotool*/
 	quit;
 
-/*		Для этого набора промо новинки заводятся для ВСЕХ товаров
+/*		��� ����� ������ ����� ������� ��������� ��� ���� �������
 				'Product : new launch LTO',
 				'Product : new launch Permanent incl item rotation',
 				'Product : line-extension' */
@@ -576,4 +578,5 @@
 	quit;
 	
 %mend add_promotool_marks2;
+
 

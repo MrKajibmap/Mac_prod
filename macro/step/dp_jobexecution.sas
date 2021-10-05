@@ -36,7 +36,7 @@
 			;
 			
 	%let lmvUrl=&CUR_API_URL.;
-	%let lmvJobName=%sysfunc(upcase(&mpJobName.));
+	%let lmvJobName = %sysfunc(upcase(&mpJobName.));
 	%let lmvAuthFlg = %sysfunc(upcase(&mpAuth.));
 	/* Получение токена аутентификации */
 	%if &lmvAuthFlg. = YES %then %do;
@@ -77,12 +77,12 @@
 	proc sql noprint;
 		select %str(href) into: lmvJobUrl
 		from process_template
-		where upcase(name)="&lmvJobName";
+		where upcase(name) = "&lmvJobName";
 	quit;
 
 	%put &=lmvJobUrl;
 	/* Проверка на существование DP-процесса */
-	%if %sysfunc(length(&lmvJobUrl.)) eq 0 %then %do;
+	%if %length(&lmvJobUrl.) eq 0 %then %do;
 		%put ERROR: Provided DP Proccess name does not exist.;
 		%global SYSCC;
 		%let SYSCC = 1012;

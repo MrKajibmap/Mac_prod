@@ -57,6 +57,27 @@
 		;
 	quit;
 	
+	/* Формируем список активных регулярных товаров */
+	proc sql;
+		create table nac.active_regular_product as
+			select
+				t1.sales_dt,
+				t1.product_id
+			from
+				nac.aggr_pmix as t1
+			inner join
+				etl_ia.product_attributes as t2
+			on
+				t1.product_id = t2.product_id
+			where
+				t2.product_attr_nm = 'REGULAR_ID' and
+				&ETL_CURRENT_DTTM. <= t2.valid_to_dttm and
+				&ETL_CURRENT_DTTM. >= t2.valid_from_dttm and
+				t2.product_id = input(t2.product_attr_value, best32.) and
+				t1.sum_qty > 100
+		;
+	quit;
+	
 	/* Агрегируем GC */
 	proc sql;
 		create table work.aggr_gc as
@@ -79,6 +100,25 @@
 			) as t1
 			group by
 				t1.sales_dt
+		;
+	quit;
+	
+	/* Формируем таблицу со средним количеством чеков в ресторане */
+	proc sql;
+		create table nac.history_mean_gc as
+			select
+				pbo_location_id,
+				mean(receipt_qty) as mean_gc
+			from
+				etl_ia.pbo_sales as t1
+			where
+				channel_cd = 'ALL' and	
+				sales_dt <= &period_end_dt. and
+				sales_dt >= &period_start_dt. and
+				&ETL_CURRENT_DTTM. <= valid_to_dttm and
+				&ETL_CURRENT_DTTM. >= valid_from_dttm
+			group by
+				pbo_location_id
 		;
 	quit;
 	

@@ -721,7 +721,7 @@
         */
         proc fedsql sessref=casauto noprint;
             create table CASUSER.PROMO_INTERVALS_OUT_1{options replace=true} as
-                select 'ALL' as CHANNEL_CD
+                select cast('ALL' as CHARACTER) as CHANNEL_CD
                     , t1.PRODUCT_ID
                     , t1.PBO_LOCATION_ID
                     , t1.PROMO_ID

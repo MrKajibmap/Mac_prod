@@ -1,6 +1,6 @@
 
-%macro load_gc_fact_last_year(
-		mpOutput=
+%macro load_fact_gc_last_year(
+		mpOutput=,
 		mpOutPath=/data/files/output/dp_files/
 	);
 	%local
@@ -9,6 +9,7 @@
 		lmvOutLib
 		lmvOutTable
 	;
+	%let lmvOutput = %upcase(&mpOutput.);
 
    %let lmvReportDttm=&ETL_CURRENT_DTTM.;
    %member_names(mpTable=&lmvOutput., mpLibrefNameKey=lmvOutLib, mpMemberNameKey=lmvOutTable);
@@ -187,4 +188,4 @@
 		mpAuthFlag=Y
 	);
 
-%mend load_gc_fact_last_year;
+%mend load_fact_gc_last_year;

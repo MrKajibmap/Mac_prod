@@ -48,7 +48,12 @@
 			where upcase(rule_nm) = upcase("&lmvJobNm.")
 		;
 		quit;
-		%tech_update_resource_status(mpStatus=P, mpResource=&lmvCondResNm.);
+		
+		%do i=1 %to %sysfunc(countw(&lmvCondResNm., %str( )));
+			%let lmvScanCondRes = %scan(&lmvCondResNm., &i., %str( ));
+			
+			%tech_update_resource_status(mpStatus=P, mpResource=&lmvScanCondRes.);
+		%end;
 	%end;
 	%else %do;
 		%tech_update_resource_status(mpStatus=P, mpResource=&lmvJobNm.);
@@ -62,7 +67,11 @@
 	
 	
 	%if &lmvModuleNm. eq DP_SEED %then %do;
-		%tech_update_resource_status(mpStatus=L, mpResource=&lmvCondResNm.);
+		%do i=1 %to %sysfunc(countw(&lmvCondResNm., %str( )));
+			%let lmvScanCondRes = %scan(&lmvCondResNm., &i., %str( ));
+			
+			%tech_update_resource_status(mpStatus=L, mpResource=&lmvScanCondRes.);
+		%end;
 	%end;
 	%else %do;
 		%tech_update_resource_status(mpStatus=L, mpResource=&lmvJobNm.);

@@ -56,39 +56,92 @@
 		, mpAuth 			= NO
 	);
 *
-****************************************************************************/
-
+****************************************************************************/																												  
 %macro rtp_7_out_integration(
-		  mpVfPmixProjName	= &VF_PMIX_PROJ_NM.
-		, mpVfPboProjName	= &VF_PBO_PROJ_NM.
-		, mpMLPmixTabName	= mn_short.pmix_days_result
-		, mpInEventsMkup	= mn_long.events_mkup
-		, mpInWpGc			= mn_dict.wp_gc
-		, mpOutPmixLt		= mn_short.plan_pmix_month
-		, mpOutGcLt			= mn_short.plan_gc_month
-		, mpOutUptLt		= mn_short.plan_upt_month
-		, mpOutPmixSt		= mn_short.plan_pmix_day
-		, mpOutGcSt			= mn_short.plan_gc_day
-		, mpOutUptSt		= mn_short.plan_upt_day
-		, mpOutOutforgc		= mn_short.TS_OUTFORGC
-		, mpOutOutfor		= mn_short.TS_OUTFOR
-		, mpOutNnetWp		= mn_dict.nnet_wp1
-		, mpPrmt			= Y
-		, mpInLibref		= mn_short
-		, mpAuth 			= NO
-	);
-
-	%let pbo_table  = MN_DICT.PBO_FORECAST_RESTORED;			/* Входная таблица прогноза UNITS PBO */
-	%let gc_table   = MN_DICT.GC_FORECAST_RESTORED;				/* Входная таблица прогноза GC PBO */
-	%let price_table= MN_DICT.PRICE_FULL_SKU_PBO_DAY;			/* Входная таблица с ценами в разрезе SKU-PBO-day */
-
+			  mpVfPmixProjName	= &VF_PMIX_PROJ_NM.								
+			, mpVfPboProjName	= &VF_PBO_PROJ_NM.
+			, mpMLPmixTabName	= DM_ABT.PMIX_RECONCILED_FULL
+			, mpInEventsMkup	= DM_ABT.EVENTS_MKUP
+			, mpInWpGc			= DM_ABT.WP_GC
+			, mpOutPmixLt		= MN_SHORT.PLAN_PMIX_MONTH
+			, mpOutGcLt			= MN_SHORT.PLAN_GC_MONTH
+			, mpOutUptLt		= MN_SHORT.PLAN_UPT_MONTH
+			, mpOutPmixSt		= MN_SHORT.PLAN_PMIX_DAY
+			, mpOutGcSt			= MN_SHORT.PLAN_GC_DAY
+			, mpOutUptSt		= MN_SHORT.PLAN_UPT_DAY
+			, mpOutOutforgc		= MN_SHORT.TS_OUTFORGC
+			, mpOutOutfor		= MN_SHORT.TS_OUTFOR
+			, mpOutNnetWp		= MN_SHORT.NNET_WP1
+			, mpPrmt			= Y
+			, mpInLibref		= &lmvInLibref.
+			, mpInPboTable		= MN_DICT.PBO_FORECAST_RESTORED
+			, mpInGCTable		= MN_DICT.GC_FORECAST_RESTORED
+			, mpInPrices		= MN_DICT.PRICE_FULL_SKU_PBO_DAY
+			, mpAuth 			= NO
+		);
+		
 	%if %sysfunc(sessfound(casauto))=0 %then %do;
 		cas casauto;
 		caslib _all_ assign;
 	%end;
 	
+	%local
+		lmvPboTable
+		lmvGCTable
+		lmvInPrices
+		lmvOutLibrefPmixSt 
+		lmvOutTabNamePmixSt 
+		lmvOutLibrefGcSt 
+		lmvOutTabNameGcSt 
+		lmvOutLibrefUptSt 
+		lmvOutTabNameUptSt 
+		lmvOutLibrefPmixLt 
+		lmvOutTabNamePmixLt 
+		lmvOutLibrefGcLt 
+		lmvOutTabNameGcLt
+		lmvOutLibrefUptLt 
+		lmvOutTabNameUptLt  
+		lmvOutLibrefOutforgc 
+		lmvOutTabNameOutforgc 
+		lmvOutLibrefOutfor 
+		lmvOutTabNameOutfor 
+		lmvInPricesTb
+		lmvInPricesLib
+		lmvVfPmixName
+		lmvVfPmixId
+		lmvVfPboName
+		lmvVfPboId
+		lmvInEventsMkup
+		lmvInLib
+		lmvReportDt
+		lmvReportDttm
+		lmvInLibref
+		lmvAPI_URL
+		;
+	
+	%let lmvPboTable = %upcase(&mpInPboTable.);
+	%let lmvGCTable = %upcase(&mpInGCTable.);
+	%let lmvInPrices = %lowcase(&mpInPrices.);
+	%let lmvInLib		= ETL_IA;
+	%let lmvReportDt	= &ETL_CURRENT_DT.;										/* Текущая дата */	
+	%let lmvReportDttm	= &ETL_CURRENT_DTTM.;									/* Текущая дата-время */	
+	%let lmvInLibref	= &mpInLibref.;											/* CAS-библиотека с прогнозами short-term*/
+	%let lmvAPI_URL 	= &CUR_API_URL.;										/* Техническая API ссылка */
+	%let lmvScoreEndDate= %sysfunc(intnx(day,&VF_HIST_END_DT_SAS.,91,s));  		/* Дата окончания short-term прогноза */
+	
+	/* Разбиваем двухуровневые имена таблиц на имя библиотек и таблиц по отдельности: */																								   
+	%member_names (mpTable=&mpOutOutfor, mpLibrefNameKey=lmvOutLibrefOutfor, mpMemberNameKey=lmvOutTabNameOutfor);
+	%member_names (mpTable=&mpOutOutforgc, mpLibrefNameKey=lmvOutLibrefOutforgc, mpMemberNameKey=lmvOutTabNameOutforgc); 
+	%member_names (mpTable=&mpOutGcSt, mpLibrefNameKey=lmvOutLibrefGcSt, mpMemberNameKey=lmvOutTabNameGcSt); 
+	%member_names (mpTable=&mpOutPmixSt, mpLibrefNameKey=lmvOutLibrefPmixSt, mpMemberNameKey=lmvOutTabNamePmixSt); 
+	%member_names (mpTable=&mpOutUptSt, mpLibrefNameKey=lmvOutLibrefUptSt, mpMemberNameKey=lmvOutTabNameUptSt); 
+	%member_names (mpTable=&mpOutGcLt, mpLibrefNameKey=lmvOutLibrefGcLt, mpMemberNameKey=lmvOutTabNameGcLt); 
+	%member_names (mpTable=&mpOutPmixLt, mpLibrefNameKey=lmvOutLibrefPmixLt, mpMemberNameKey=lmvOutTabNamePmixLt); 
+	%member_names (mpTable=&mpOutUptLt, mpLibrefNameKey=lmvOutLibrefUptLt, mpMemberNameKey=lmvOutTabNameUptLt); 
+	%member_names (mpTable=&lmvInPrices, mpLibrefNameKey=lmvInPricesLib, mpMemberNameKey=lmvInPricesTb); 
+
 	proc cas;
-		table.tableExists result = rc / caslib="mn_dict" name="NNET_WP1";								/* Что это за таблица??? Где используется??? */
+		table.tableExists result = rc / caslib="mn_dict" name="NNET_WP1";
 		if rc=0  then do;
 			loadtable / caslib='mn_dict',
 						path='NNET_WP1_ATTR.sashdat',
@@ -104,8 +157,7 @@
 		end;
 		else print("Table mn_dict.NNET_WP1 already loaded");
 		
-
-		table.tableExists result = rc / caslib="mn_dict" name="wp_gc";									
+		table.tableExists result = rc / caslib="mn_dict" name="wp_gc";
 		if rc=0  then do;
 			loadtable / caslib='mn_dict',
 			path='wp_gc.sashdat',
@@ -113,9 +165,8 @@
 			table.promote / name="wp_gc" caslib="mn_dict" target="wp_gc" targetlib="mn_dict";
 		end;
 		else print("Table mn_dict.wp_gc already loaded");	
-
-
-		table.tableExists result = rc / caslib="mn_long" name="events_mkup";							/* Таблица Events по географической иерархии */
+		
+		table.tableExists result = rc / caslib="mn_long" name="events_mkup";
 		if rc=0  then do;
 			loadtable / caslib='mn_long',
 			path='events_mkup.sashdat',
@@ -131,58 +182,11 @@
 								&mpOutNnetWp.
 								);
 								
-
-	%local	lmvOutLibrefPmixSt 																			/* Где используется переменная??? Откуда приходит значение??? */
-			lmvOutTabNamePmixSt 																		/* Где используется переменная??? Откуда приходит значение??? */
-			lmvOutLibrefGcSt 																			/* Где используется переменная??? Откуда приходит значение??? */
-			lmvOutTabNameGcSt 																			/* Где используется переменная??? Откуда приходит значение??? */
-			lmvOutLibrefUptSt 																			/* Где используется переменная??? Откуда приходит значение??? */
-			lmvOutTabNameUptSt 																			/* Где используется переменная??? Откуда приходит значение??? */
-			lmvOutLibrefPmixLt 																			/* Где используется переменная??? Откуда приходит значение??? */
-			lmvOutTabNamePmixLt 																		/* Где используется переменная??? Откуда приходит значение??? */
-			lmvOutLibrefGcLt 																			/* Где используется переменная??? Откуда приходит значение??? */
-			lmvOutTabNameGcLt																			/* Где используется переменная??? Откуда приходит значение??? */
-			lmvOutLibrefUptLt 																			/* Где используется переменная??? Откуда приходит значение??? */
-			lmvOutTabNameUptLt  																		/* Где используется переменная??? Откуда приходит значение??? */
-			lmvOutLibrefOutforgc 																		/* Где используется переменная??? Откуда приходит значение??? */
-			lmvOutTabNameOutforgc 																		/* Где используется переменная??? Откуда приходит значение??? */
-			lmvOutLibrefOutfor 																			/* Где используется переменная??? Откуда приходит значение??? */
-			lmvOutTabNameOutfor 																		/* Где используется переменная??? Откуда приходит значение??? */
-			lmvVfPmixName																				/* Где используется переменная??? Откуда приходит значение??? */
-			lmvVfPmixId																					/* Где используется переменная??? Откуда приходит значение??? */
-			lmvVfPboName																				/* Где используется переменная??? Откуда приходит значение??? */
-			lmvVfPboId																					/* Где используется переменная??? Откуда приходит значение??? */
-			lmvInEventsMkup																				/* Где используется переменная??? Откуда приходит значение??? */
-			lmvInLib																					/* Входная библиотека??? */
-			lmvReportDt																					/* Где используется переменная??? Откуда приходит значение??? */
-			lmvReportDttm																				/* Где используется переменная??? Откуда приходит значение??? */
-			lmvInLibref																					/* Где используется переменная??? Откуда приходит значение??? */
-			lmvAPI_URL																					/* Где используется переменная??? Откуда приходит значение??? */
-			;
 			
-	%let lmvInLib		= ETL_IA;
-	%let lmvReportDt	= &ETL_CURRENT_DT.;										/* Текущая дата */	
-	%let lmvReportDttm	= &ETL_CURRENT_DTTM.;									/* Текущая дата-время */	
-	%let lmvInLibref	= &mpInLibref.;											/* CAS-библиотека с прогнозами short-term*/
-	%let lmvAPI_URL 	= &CUR_API_URL.;										/* Техническая API ссылка */
-	%let lmvScoreEndDate= %sysfunc(intnx(day,&VF_HIST_END_DT_SAS.,91,s));  		/* Дата окончания short-term прогноза */
-	
-	/* Разбиваем двухуровневые имена таблиц на имя библиотек и таблиц по отдельности: */
-	%member_names (mpTable=&mpOutOutfor, mpLibrefNameKey=lmvOutLibrefOutfor, mpMemberNameKey=lmvOutTabNameOutfor);				
-	%member_names (mpTable=&mpOutOutforgc, mpLibrefNameKey=lmvOutLibrefOutforgc, mpMemberNameKey=lmvOutTabNameOutforgc); 		
-	%member_names (mpTable=&mpOutGcSt, mpLibrefNameKey=lmvOutLibrefGcSt, mpMemberNameKey=lmvOutTabNameGcSt); 					
-	%member_names (mpTable=&mpOutPmixSt, mpLibrefNameKey=lmvOutLibrefPmixSt, mpMemberNameKey=lmvOutTabNamePmixSt); 				
-	%member_names (mpTable=&mpOutUptSt, mpLibrefNameKey=lmvOutLibrefUptSt, mpMemberNameKey=lmvOutTabNameUptSt); 				
-	%member_names (mpTable=&mpOutGcLt, mpLibrefNameKey=lmvOutLibrefGcLt, mpMemberNameKey=lmvOutTabNameGcLt); 					
-	%member_names (mpTable=&mpOutPmixLt, mpLibrefNameKey=lmvOutLibrefPmixLt, mpMemberNameKey=lmvOutTabNamePmixLt); 				
-	%member_names (mpTable=&mpOutUptLt, mpLibrefNameKey=lmvOutLibrefUptLt, mpMemberNameKey=lmvOutTabNameUptLt); 				
-
-
-/* ------------ Start. Проводим аутентификацию ------------------------------------ */
+/* ------------ Start. Проводим аутентификацию ------------------------------------ */																											
 	%if &mpAuth. = YES %then %do;
-		/* Напоминание: Надо поменять ru-nborzunov на, кажется, SYS_USER_ID, или вообще удалить этот кусок и вызывать до этого скрипта в основном потоке */
-		%tech_get_token(mpUsername=ru-nborzunov, mpOutToken=tmp_token);	
-				
+		%tech_get_token(mpUsername=&SYS_ADM_USER., mpOutToken=tmp_token);
+		
 		filename resp TEMP;
 		proc http
 		  method="GET"
@@ -203,29 +207,24 @@
 	%else %if &mpAuth. = NO %then %do;
 		%vf_get_project_list(mpOut=work.vf_project_list);
 	%end;
-/* ------------ End. Проводим аутентификацию -------------------------------------- */
+	/* ------------ End. Проводим аутентификацию -------------------------------------- */
 
 
 /*************************************************************************************
  *		Обработка long-term прогнозов из VF											 *
  ************************************************************************************/
-
-/* ------------ Start. Извлечение ID для long-term VF-проекта PMIX по его имени ------------- */
+/* ------------ Start. Извлечение ID для long-term VF-проекта PMIX по его имени ------------- */								   
 	%let lmvVfPmixName = &mpVfPmixProjName.;
 	%let lmvVfPmixId = %vf_get_project_id_by_name(mpName=&lmvVfPmixName., mpProjList=work.vf_project_list);
 /* ------------ End. Извлечение ID для VF-проекта PMIX по его имени --------------- */
 
-
 /* ------------ Start. Извлечение ID для long-term VF-проекта PBO по его имени -------------- */
 	%let lmvVfPboName = &mpVfPboProjName.;
 	%let lmvVfPboId = %vf_get_project_id_by_name(mpName=&lmvVfPboName., mpProjList=work.vf_project_list);
-/* ------------ End. Извлечение ID для VF-проекта PBO по его имени ---------------- */
-
-	
+/* ------------ End. Извлечение ID для VF-проекта PBO по его имени ---------------- */									
 	%let lmvInEventsMkup=&mpInEventsMkup;
 
-
-/* ------------ Start. Удаление целевых таблиц ------------------------------------ */
+/* ------------ Start. Удаление целевых таблиц ------------------------------------ */																				   
 	%if &mpPrmt. = Y %then %do;
 		proc casutil;
 			droptable casdata="&lmvOutTabNameGcSt." incaslib="&lmvOutLibrefGcSt." quiet;
@@ -272,21 +271,23 @@
 /* ------------ End. Вытащить данные из проекта ----------------------------------- */
 
 
-/* ------------ Start. Применяем к недельным long-term прогнозам недельные профили ---------- */
-	%vf_apply_w_prof(&lmvOutLibrefOutfor..&lmvOutTabNameOutfor.,
-					&lmvOutLibrefOutfor..&lmvOutTabNameOutforgc.,
-					casuser.nnet_wp_scored1,
-					casuser.daily_gc,
-					&mpInEventsMkup.,
-					&mpInWpGc.,
-					&mpOutNnetWp.,
-					&lmvInLibref.);
+/* ------------ Start. Применяем к недельным long-term прогнозам недельные профили ---------- */			   
+	%vf_apply_w_prof(
+		  &lmvOutLibrefOutfor..&lmvOutTabNameOutfor.
+		, &lmvOutLibrefOutfor..&lmvOutTabNameOutforgc.
+		, casuser.nnet_wp_scored1
+		, casuser.daily_gc
+		, &mpInEventsMkup.
+		, &mpInWpGc.
+		, &mpOutNnetWp.
+		, &lmvInLibref.
+	);
 	
-	/* Разворачиваем long-term прогнозы с недель до дней */
 	data casuser.pmix_daily(drop=channel_cd_old);
 		set casuser.nnet_wp_scored1(rename=(channel_cd=channel_cd_old));
 		length channel_cd $48;
 		channel_cd = channel_cd_old;
+										
 		array p_weekday{7};
 		array PR_{7};
 		keep CHANNEL_CD PBO_LOCATION_ID PRODUCT_ID period_dt mon_dt FF promo;
@@ -317,7 +318,8 @@
 	proc casutil;
 		droptable casdata="nnet_wp_scored1" incaslib="mn_short" quiet;
 	run;
-	quit;
+	quit;			  						
+											  								  	
 /* ------------ End. Применяем к недельным прогнозам недельные профили (longterm)-- */
 	
 
@@ -351,8 +353,8 @@
 		from casuser.promo_w2 t1
 		;
 	quit;
-
-	/* Энкодим ID канала его наименованием из отдельного справочника */
+	
+/* Энкодим ID канала его наименованием из отдельного справочника */
 	proc fedsql sessref=casauto;
         create table casuser.short_term{options replace=true} as
         select distinct 
@@ -380,8 +382,7 @@
 		droptable casdata="short_term" incaslib="casuser" quiet;
 	run;
 	quit;
-
-
+	
 /************************************************************************************
  *		Вычисление матриц временных закрытий и допустимых дней продаж			*
  ************************************************************************************/
@@ -430,7 +431,7 @@
 	select distinct * from casuser.days_pbo_close;
 	quit;
 /* ------------ End. Убираем дубликаты -------------------------------------------- */
-
+ 
 
 /************************************************************************************
  *		Обработка замен T															*
@@ -488,7 +489,6 @@
 		  выводы позднее fc_agg_end_dt отсекаем*/
 	quit;
 
-
 /************************************************************************************
  *		Добавление прогноза по новым товарам по дням											*
  ************************************************************************************/
@@ -516,6 +516,9 @@
 
 	/* Если есть прогноз модели новых товаров */
 	%else %do;																							
+	  
+	   
+  
 		proc fedsql sessref=casauto;
 			create table casuser.pmix_daily_new{options replace=true} as
 			select 
@@ -538,7 +541,7 @@
 			save incaslib="mn_short" outcaslib="mn_short" casdata="pmix_daily" casout="pmix_daily.sashdat" replace;
 	run;
 	quit;
-
+	
 
 /* ------------ Start. Добавление в АМ информации из новинок ---------------------- */
 	/* Замечание: проверить не появляется ли дублей */
@@ -616,6 +619,7 @@
 	
 	/* Удаляем периоды period_dt после даты закрытия predecessor */
 	proc fedsql sessref=casauto;
+																		
 		create table casuser.plm_sales_mask{options replace=true} as
 		select 
 			    t1.PBO_LOCATION_ID
@@ -638,6 +642,7 @@
 
 /* ------------ Start. Удалить периоды временного и постоянного закрытия ПБО */
 	proc fedsql sessref=casauto;
+																																											  
 		create table casuser.plm_sales_mask1{options replace=true} as
 		select 
 			  main.PBO_LOCATION_ID
@@ -650,6 +655,7 @@
 			on  main.pbo_location_id = clsd.pbo_location_id 
 			and main.period_dt		 = clsd.period_dt
 		
+																																		  
 		left join casuser.predessor_periods_t as prpt
 			on  main.pbo_location_id = prpt.pbo_location_id 
 			and main.product_id		 = prpt.product_id
@@ -662,10 +668,13 @@
 			/* Для predcessor из plm_sales_mask1 удаляем периоды с датой после даты вывода (period_dt > end_dt).
 				Если ряд есть в predcessor - оставляем всё <= даты вывода, если нет - не смотрим на дату */
 			and ((main.period_dt <= prpt.end_dt and prpt.end_dt is not null) or prpt.end_dt is null)
+																																																			 
 		;
 	quit;
 	
 	proc casutil;
+															   
+		   
 		droptable casdata="predessor_periods_t" incaslib="mn_short" quiet;
 		promote casdata="predessor_periods_t" incaslib="casuser" outcaslib="mn_short";
 		save incaslib="mn_short" outcaslib="mn_short" casdata="predessor_periods_t" casout="predessor_periods_t.sashdat" replace;
@@ -673,6 +682,7 @@
 	quit;
 	
 	proc casutil;
+		   
 		droptable casdata="plm_sales_mask" incaslib="mn_short" quiet;
 		promote casdata="plm_sales_mask" incaslib="casuser" outcaslib="mn_short";
 		save incaslib="mn_short" outcaslib="mn_short" casdata="plm_sales_mask" casout="plm_sales_mask.sashdat" replace;
@@ -703,7 +713,8 @@
 /* ------------ Start. Cоздаём дубликаты прогнозов, копируя predesessor под id successor -- */
 
 /* ------------ Start. Подготовка прогноза для применения PLM  --------------------------- */
-	/
+							 
+	  
     proc fedsql sessref=casauto;
 		create table casuser.pmix_daily_new_{options replace=true} as
 			select 
@@ -814,6 +825,16 @@
 
 
 /* ------------ Start. Реконсилируем прогноз с PBO до PBO-SKU --------------------- */
+		/* Проверка на сущ-е источника */
+		%if %sysfunc(exist(&lmvPboTable.)) eq 0 %then %do;	
+			%let lmvPboTableNm = %scan(&lmvPboTable.,2,%str(.));
+			%let lmvPboLibref = %scan(&lmvPboTable.,1,%str(.));
+			proc casutil;
+				droptable casdata="&lmvPboTableNm." incaslib="&lmvPboLibref." quiet;
+				load casdata="&lmvPboTableNm..sashdat" incaslib="&lmvPboLibref." casout="&lmvPboTableNm." outcaslib="&lmvPboLibref.";
+			quit;
+		%end;
+		
 		create table casuser.fcst_reconciled{options replace=true} as
 			select
 				  pct.CHANNEL_CD
@@ -827,20 +848,26 @@
 			from
 				casuser.percent as pct
 			left join 
-				&pbo_table. as vf
+				&lmvPboTable. as vf
 			on      pct.pbo_location_id = vf.pbo_location_id 
 				and pct.period_dt       = vf.sales_dt
 				and pct.CHANNEL_CD 		= vf.CHANNEL_CD 
 		;
 	quit;
 
+ 
 	proc casutil;
+   
+																 
 		droptable casdata="fcst_reconciled" incaslib="mn_short" quiet;
 		save incaslib="casuser" outcaslib="mn_short" casdata="fcst_reconciled" casout="fcst_reconciled.sashdat" replace;
+			
 		droptable casdata="plm_sales_mask1" incaslib="mn_short" quiet;
 		promote casdata="plm_sales_mask1" incaslib="casuser" outcaslib="mn_short";
 		save incaslib="mn_short" outcaslib="mn_short" casdata="plm_sales_mask1" casout="plm_sales_mask1.sashdat" replace;
 	run;
+
+																																									 
 
 /* ------------ End. Реконсилируем прогноз с PBO до PBO-SKU ----------------------- */
 	
@@ -866,7 +893,7 @@
 				, coalesce(t1.pbo_location_id,t2.pbo_location_id) as pbo_location_id
 				, coalesce(t1.ff,t2.gc_fcst) as ff
 		from casuser.daily_gc as t1 
-		full outer join &gc_table. as t2
+		full outer join &lmvGCTable. as t2
 			on  t1.period_dt 		= t2.sales_dt 
 			and t1.channel_cd		= t2.channel_cd 
 			and t1.pbo_location_id	= t2.pbo_location_id
@@ -900,6 +927,8 @@
 /* ------------ Start. Очистка CAS, сохранение и promote таблиц GC ------------- */
 
 	proc casutil;
+															   
+		   
 		droptable casdata="days_pbo_close" incaslib="mn_short" quiet;
 		promote casdata="days_pbo_close" incaslib="casuser" outcaslib="mn_short";
 		save incaslib="mn_short" outcaslib="mn_short" casdata="days_pbo_close" casout="days_pbo_close.sashdat" replace;
@@ -916,10 +945,16 @@
 
 	proc casutil;
 		save incaslib="casuser" outcaslib="mn_short" casdata="fc_w_plm" casout="fc_w_plm.sashdat" replace;
+  
 		save incaslib="casuser" outcaslib="mn_short" casdata="fc_w_plm_gc" casout="fc_w_plm_gc.sashdat" replace;
+  
 		save incaslib="casuser" outcaslib="mn_short" casdata="fc_wo_plm_gc" casout="fc_wo_plm_gc.sashdat" replace;
 	run;
-	quit;
+	quit;				
+													   
+
+/* ------------ End. Очистка CAS, сохранение и promote таблиц GC ------------- */
+
 
 /* ------------ End. Очистка CAS, сохранение и promote таблиц GC ------------- */
 
@@ -928,6 +963,11 @@
  *		Формирование выходных таблиц в разрезе ДЕНЬ для SHORT-горизонта 			*
  ************************************************************************************/	
 
+	proc casutil;
+		droptable casdata="&lmvInPricesTb." incaslib="&lmvInPricesLib." quiet;
+		load casdata="&lmvInPricesTb..sashdat" incaslib="&lmvInPricesLib." casout="&lmvInPricesTb." outcaslib="&lmvInPricesLib.";
+	quit;
+	
 /* ------------ Start. Units  ----------------------------------------------------- */
 	proc fedsql sessref=casauto;
 	create table &lmvOutLibrefPmixSt..&lmvOutTabNamePmixSt.{options replace=true} as
@@ -939,7 +979,8 @@
 			
 			/*'CORP' as ORG Организация, значение по умолчанию CORP*/
 			/* Base-прогноз (заполняется, если в для товар-ПБО-день не было ни одной промо-акции, иначе 0) */
-			case when t1.promo=1 then t1.FF else 0 end
+																																				
+			, case when t1.promo=1 then t1.FF else 0 end
 			, case 
 				when t1.promo = 0 then t1.FF 
 				else 0 
@@ -957,7 +998,7 @@
 			/* Overrided-прогноз (в текущей версии всегда равен Total-прогноз) */
 			, t1.FF as OVERRIDED_FCST_UNITS
 			/* Тригер оверрайда, по умолчанию значение 1 */
-			, 1 as OVERRIDE_TRIGGER,																		
+			, 1 as OVERRIDE_TRIGGER																		
 			
 			/* Base-forecast, RUR, based on net-prices */
 			, case 
@@ -979,7 +1020,7 @@
 			, t2.price_net as AVG_PRICE 																
 			
 			from casuser.fcst_reconciled as t1 
-			left join &price_table. t2 
+			left join &lmvInPrices. t2 
 				on  t1.product_id		= t2.product_id 
 				and t1.pbo_location_id	= t2.pbo_location_id 
 				and t1.period_dt		= t2.period_dt
@@ -987,7 +1028,7 @@
 				and t1.period_dt between &VF_FC_START_DT. and &VF_FC_END_SHORT_DT.
 			;
 	quit;
-/* ------------ End. Units  ------------------------------------------------------- */
+
 
 /* ------------ Start. GC  -------------------------------------------------------- */
 	proc fedsql sessref=casauto;
@@ -1040,6 +1081,7 @@
 			   end as PROMO_FCST_UPT
 			   
 			, 1 as OVERRIDE_TRIGGER_D /*– тригер оверрайда по умолчанию значение 1*/
+																																				  
 		from &lmvOutLibrefPmixSt..&lmvOutTabNamePmixSt. as t1 
 		left join &lmvOutLibrefGcSt..&lmvOutTabNameGcSt. as t2
 			on  t1.location	= t2.location 
@@ -1060,9 +1102,7 @@
 		save incaslib="&lmvOutLibrefUptSt." outcaslib="&lmvOutLibrefUptSt." casdata="&lmvOutTabNameUptSt." casout="&lmvOutTabNameUptSt..sashdat" replace;
 		quit;
 	%end;
-
-
-/************************************************************************************
+	/************************************************************************************
  *		Формирование выходных таблиц в разрезе МЕСЯЦ для LONG-горизонта 			*
  ************************************************************************************/	
 
@@ -1090,9 +1130,14 @@
 			
 			/* Base-forecast */
 			, sum( case when promo=0 then t1.FF else 0 end ) as BASE_FCST_UNITS 
+																			 
 			, sum( case when promo=0 then t1.ff * t2.price_net else 0 end ) as BASE_FCST_SALE
 			/* Promo-forecast */
+																															 
+																																 
+																																			   
 			, sum( case when promo=1 then t1.FF else 0 end ) as PROMO_FCST_UNITS
+																						  
 			, sum( case when promo=1 then t1.ff * t2.price_net else 0 end ) as PROMO_FCST_SALE
 			/* Total-forecast */
 			, sum(FF) as FINAL_FCST_UNITS
@@ -1109,13 +1154,16 @@
 				else 0 
 			  end as AVG_PRICE 
 		from CASUSER.FCST_RECONCILED as t1 
-		left join &price_table. t2 
+		left join &lmvInPrices. t2 
 			on  t1.product_id		= t2.product_id 
 			and t1.pbo_location_id	= t2.pbo_location_id 
 			and t1.period_dt		= t2.period_dt
 		where t1.channel_cd = 'ALL' 
 		group by 1,2,3,4
 		;
+ 
+			  
+																		
 	quit;
 /* ------------ End. Pmix ------------------------------------------------------------------ */
 
@@ -1123,7 +1171,7 @@
 	proc fedsql sessref=casauto;
 		create table &lmvOutLibrefGcLt..&lmvOutTabNameGcLt.{options replace=true} as
 		select distinct
-			, 1 as PROD 												/*– ИД продукта на верхнем уровне (ALL Product, значение = 1)*/
+			1 as PROD 												/*– ИД продукта на верхнем уровне (ALL Product, значение = 1)*/
 			, cast(t1.pbo_location_id as integer) as LOCATION 			/*– ИД ресторана*/
 			, cast(intnx('month',t1.period_dt,0,'b') as date) as DATA 	/*– Дата прогноза или факта (месяц), как вам название? */
 			, 'RUR' as CURRENCY 				/*– Валюта, значение по умолчанию RUR*/
@@ -1153,16 +1201,18 @@
 						then t1.BASE_FCST_UNITS / t2.BASE_FCST_GC * 1000 
 				else 0
 			  end as BASE_FCST_UPT /*– базовый прогноз*/
+																		   
 			, case 
 				when t2.BASE_FCST_GC is not null 
 					and abs(t2.BASE_FCST_GC) > 1e-5 
 						then t1.PROMO_FCST_SALE / t2.BASE_FCST_GC * 1000 
 				else 0
+		 
 			  end as PROMO_FCST_UPT /*– промо прогноз*/
 			, case 
 				when t2.BASE_FCST_GC is not null 
 					and abs(t2.BASE_FCST_GC) > 1e-5 
-						then t1.FINAL_FCST_UNITS / t2.BASE_FCST_GC * 1000 
+						then t1.FINAL_FCST_UNITS / t2.BASE_FCST_GC * 1000 								
 			   else 0
 			  end as FINAL_FCST_UPT /*– суммарный прогноз */
 			, case 

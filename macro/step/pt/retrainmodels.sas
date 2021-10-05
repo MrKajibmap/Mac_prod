@@ -27,6 +27,9 @@ options casdatalimit=10G;
 libname cheque "/data/backup/"; /* Директория с чеками */
 libname nac "/data/MN_CALC"; /* Директория в которую складываем результат */
 
+/* Текущий день */
+%let ETL_CURRENT_DT_DB = date %str(%')%sysfunc(putn(%sysfunc(datepart(%sysfunc(datetime()))),yymmdd10.))%str(%');
+
 %macro assign;
 	%let casauto_ok = %sysfunc(SESSFOUND ( casauto)) ;
 	%if &casauto_ok = 0 %then %do; /*set all stuff only if casauto is absent */
@@ -49,12 +52,29 @@ libname nac "/data/MN_CALC"; /* Директория в которую скла�
 proc fedsql sessref=casauto;
 	create table casuser.past_promo{options replace=true} as
 		select
-			*
+			*,
+			trim(coalesce(cast(promo_txt_id as char(36)), put(PROMO_ID, 12.))) as hybrid_promo_id
 		from
 			casuser.promo_enh
 		where
 			channel_cd = 'ALL' and
-			end_dt <= date '2021-04-12'
+			start_dt >= date '2019-01-01' and
+			end_dt <= &ETL_CURRENT_DT_DB. and
+			trim(promo_mechanics) ^= 'Other: Collaboration' and 
+			promo_nm not in ( /* акции не обсчитались из-за проблем в данных */
+				'2020 30 years Anniversary: : Big Mac @ 3 rubles',
+				'2020 McFest: Summer: Gift for subscription 3 (Strips)',
+				'2020 : EDAP: Omletter + Cappucino 0,2 @129 rub',
+				'TOW Italy: Panini Chicken Pair'
+			) and
+			promo_nm not in ( /* акции на zr товары, которые не могут быть рассчитаны */
+				'2020 TOW: : 2 Beef a-la Rus @279',
+				'2020 : : 2 Royals @199',
+				'2020 : Royal: 2 Royals @199',
+				'2020 : Big Tasty: 2 Big Tasty @ 299',
+				'2019 Royal+Royal BOGO',
+				'2019 McFest: wave 1 w3- 2Big Mac @ 199'
+			)
 	;
 quit;
 
@@ -62,16 +82,13 @@ quit;
 /*** 3. Рассчет эффективности промо акций на истории ***/
 
 /* a. Подсчет из чеков n_a и t_a */
-%include '/opt/sas/mcd_config/macro/step/pt/na_calculation.sas';
+%include '/opt/sas/mcd_config/macro/step/pt/na_calculation_dev.sas';
 %na_calculation(
 	promo_lib = casuser, 
 	ia_promo = past_promo,
 	ia_promo_x_pbo = promo_pbo_enh,
-	ia_promo_x_product = promo_product_enh,
-	hist_start_dt = date '2019-01-01',
-	hist_end_dt =  date '2021-04-12',
-	filter = channel_cd = 'ALL' and promo_id ^= 745
-)
+	ia_promo_x_product = promo_prod_enh,
+);
 
 /* b. Сборка витрины для модели прогнозирования n_a и t_a */
 %include '/opt/sas/mcd_config/macro/step/pt/promo_effectiveness_abt_building_dev.sas';
@@ -80,11 +97,10 @@ quit;
 	ia_promo = past_promo,
 	ia_promo_x_pbo = promo_pbo_enh,
 	ia_promo_x_product = promo_prod_enh,
-	hist_start_dt = date '2019-01-01',
 	ia_media = media_enh,
-	filter = t1.channel_cd = 'ALL',
 	calendar_start = '01jan2017'd,
-	calendar_end = '01jan2022'd
+	calendar_end = '01jan2022'd,
+	na_history_table = nac.na_calculation_result_new
 );
 
 /* c. Обучение модели для прогнозирования n_a  и t_a */
@@ -92,7 +108,7 @@ quit;
 /* Сэмплируем обучающую выборку */
 /* proc surveyselect data=nac.na_abt17 out=nac.na_train_sample sampsize=500000; */
 /* run; */
-/*  */
+
 data casuser.na_abt17;
 	set nac.na_abt17;
 run;

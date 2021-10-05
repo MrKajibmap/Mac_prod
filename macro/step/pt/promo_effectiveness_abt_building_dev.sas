@@ -58,7 +58,6 @@ datalines;
 2022-06-12 National_Day
 2022-11-04 Day_of_Unity
 2022-05-01 Labour_Day
-2022-01-03 New_Year_shift
 2022-12-25 Christmas_Day
 2023-01-01 New_year
 2023-01-02 Day_After_New_Year
@@ -69,10 +68,18 @@ datalines;
 2023-06-12 National_Day
 2023-11-04 Day_of_Unity
 2023-05-01 Labour_Day
-2023-01-02 New_Year_shift
 2023-12-25 Christmas_Day
 ;
 run;
+
+/* %let promo_lib = casuser; */
+/* %let ia_promo = past_promo; */
+/* %let ia_promo_x_pbo = promo_pbo_enh; */
+/* %let ia_promo_x_product = promo_prod_enh; */
+/* %let ia_media = media_enh; */
+/* %let calendar_start = '01jan2017'd; */
+/* %let calendar_end = '01jan2022'd; */
+
 
 
 %macro promo_effectiveness_abt_building(
@@ -80,11 +87,10 @@ run;
 	ia_promo = past_promo,
 	ia_promo_x_pbo = promo_pbo_enh,
 	ia_promo_x_product = promo_prod_enh,
-	hist_start_dt = date '2019-01-01',
 	ia_media = media_enh,
-	filter = t1.channel_cd = 'ALL',
 	calendar_start = '01jan2017'd,
-	calendar_end = '01jan2022'd
+	calendar_end = '01jan2022'd,
+	na_history_table = nac.na_calculation_result_new
 );
 /*
 	Скрипт, который собирает обучающую выборку для модели прогнозирующей na (и ta).
@@ -123,10 +129,10 @@ run;
 		* ia_promo: название таблицы с информацией о промо 
 		* ia_promo_x_pbo: название таблицы с привязкой промо к ресторнам
 		* ia_promo_x_product: название таблицы с привязкой промо к товарам
-		* hist_start_dt: рассматриваем все промо, начавшиеся после этой даты
-		* filter : фильтр для таблицы с промо (например, убрать каналы)
+		* ia_media : название таблицы с TRP
 		* calendar_start : старт интервала формирования календарных признаков
 		* calendar_end : конец интервала формирования календарных признаков
+		* na_history_table : название таблицы посчитанными в чеках показателями эффективности
 	Выход:
 	------
 		* Запромоученая в public и скопированная в nac таблица na_train
@@ -140,17 +146,11 @@ run;
 	/* Загружаем товарную и географическую иерархии */
 	proc casutil;
 		load data=etl_ia.pbo_loc_hierarchy(
-			where=(
-				&ETL_CURRENT_DTTM. <= valid_to_dttm and
-				&ETL_CURRENT_DTTM. >= valid_from_dttm
-			)
+			where=(year(valid_to_dttm) = 5999)
 		) casout='ia_pbo_loc_hierarchy' outcaslib='public' replace;	
 	
 		load data=etl_ia.product_hierarchy(
-			where=(
-				&ETL_CURRENT_DTTM. <= valid_to_dttm and
-				&ETL_CURRENT_DTTM. >= valid_from_dttm
-			)
+			where=(year(valid_to_dttm) = 5999)
 		) casout='ia_product_hierarchy' outcaslib='public' replace;
 	run;
 	
@@ -296,10 +296,11 @@ run;
 		create table public.promo_skelet{options replace = true} as 
 			select
 				t1.PROMO_ID,
+				t1.hybrid_promo_id,
 				t2.pbo_location_id,
-				t1.START_DT,
-				t1.END_DT,
-				(t1.END_DT - t1.START_DT + 1) as promo_lifetime,
+				t1.start_dt,
+				t1.end_dt,
+				(t1.end_dt - t1.start_dt + 1) as promo_lifetime,
 				t1.CHANNEL_CD,
 				t1.NP_GIFT_PRICE_AMT,
 				t1.PROMO_GROUP_ID,
@@ -310,20 +311,60 @@ run;
 				public.ia_promo_x_pbo_leaf as t2
 			on 
 				t1.PROMO_ID = t2.PROMO_ID
-			where
-				&filter.
-				and t1.start_dt >= &hist_start_dt.
 		;
 	quit;
 		
 	/* Расшиваем интервалы по дням */
-	data public.na_abt1;
+	data public.na_abt0;
 		set public.promo_skelet;
 		format sales_dt DATE9.;
 		do sales_dt=start_dt to end_dt;
 			output;
 		end;
 	run;
+
+	/* Загружаем информацию об открытии и закрытие ресторанов */
+	proc sql;
+		create table work.pbo_close_open as
+			select
+				pbo_location_id,
+				pbo_loc_attr_nm,
+				pbo_loc_attr_value,
+				input(pbo_loc_attr_value, ddmmyy10.) as close_open_date format date9.
+			from
+				etl_ia.pbo_loc_attributes
+			where
+				(year(valid_to_dttm) = 5999) and 
+				(pbo_loc_attr_nm in ('OPEN_DATE', 'CLOSE_DATE')) and
+				pbo_loc_attr_value is not missing
+		;
+	quit;
+
+	/* Выгружаем в cas */
+	data public.pbo_close_open;
+		set work.pbo_close_open;
+	run;
+
+	/* Убираем закрытые и еще не открые рестораны */
+	proc fedsql sessref=casauto;
+		create table public.na_abt1{options replace=true} as
+			select
+				t1.*
+			from
+				public.na_abt0 as t1
+			left join 
+				(select * from public.pbo_close_open where pbo_loc_attr_nm = 'OPEN_DATE') as t2
+			on
+				t1.pbo_location_id = t2.pbo_location_id
+			left join 
+				(select * from public.pbo_close_open where pbo_loc_attr_nm = 'CLOSE_DATE') as t3
+			on
+				t1.pbo_location_id = t3.pbo_location_id
+			where
+				t1.sales_dt >= coalesce(t2.close_open_date, date'1980-01-01') and
+				t1.sales_dt <= coalesce(t3.close_open_date, date'2040-01-01')
+		; 
+	quit;
 	
 	/* Сохраняем связующие таблицы для скоринга */
 	data nac.pbo_lvl_all;
@@ -348,6 +389,8 @@ run;
 		droptable casdata="lvl1" incaslib="public" quiet;
 		droptable casdata="pbo_lvl_all" incaslib="public" quiet;
 		droptable casdata="product_lvl_all" incaslib="public" quiet;
+
+		droptable casdata="na_abt0" incaslib="public" quiet;
 	run;
 
 	/* 	------------ End. Вычисление каркаса таблицы промо акций ------------- */
@@ -495,24 +538,15 @@ run;
 	/* Загружаем информацию о товарах */
 	proc casutil;
 		load data=etl_ia.product(
-			where=(
-				&ETL_CURRENT_DTTM. <= valid_to_dttm and
-				&ETL_CURRENT_DTTM. >= valid_from_dttm
-			)
+			where=(year(valid_to_dttm) = 5999)
 		) casout='ia_product' outcaslib='public' replace;
 		
 		load data=etl_ia.product_HIERARCHY(
-			where=(
-				&ETL_CURRENT_DTTM. <= valid_to_dttm and
-				&ETL_CURRENT_DTTM. >= valid_from_dttm
-			)
+			where=(year(valid_to_dttm) = 5999)
 		) casout='IA_product_HIERARCHY' outcaslib='public' replace;
 		
 		load data=etl_ia.product_ATTRIBUTES(
-			where=(
-				&ETL_CURRENT_DTTM. <= valid_to_dttm and
-				&ETL_CURRENT_DTTM. >= valid_from_dttm
-			)
+			where=(year(valid_to_dttm) = 5999)
 		) casout='IA_product_ATTRIBUTES' outcaslib='public' replace;
 	run;
 	  
@@ -687,24 +721,15 @@ run;
 	/* Загружаем справочники ПБО */
 	proc casutil;	
 		load data=etl_ia.pbo_location(
-				where=(
-					&ETL_CURRENT_DTTM. <= valid_to_dttm and
-					&ETL_CURRENT_DTTM. >= valid_from_dttm
-				)
+				where=(year(valid_to_dttm) = 5999)
 			) casout='ia_pbo_location' outcaslib='public' replace;
 	
 		load data=etl_ia.PBO_LOC_HIERARCHY(
-				where=(
-					&ETL_CURRENT_DTTM. <= valid_to_dttm and
-					&ETL_CURRENT_DTTM. >= valid_from_dttm
-				)
+				where=(year(valid_to_dttm) = 5999)
 			) casout='ia_pbo_loc_hierarchy' outcaslib='public' replace;
 	
 		load data=etl_ia.PBO_LOC_ATTRIBUTES(
-				where=(
-					&ETL_CURRENT_DTTM. <= valid_to_dttm and
-					&ETL_CURRENT_DTTM. >= valid_from_dttm
-				)
+				where=(year(valid_to_dttm) = 5999)
 			) casout='ia_pbo_loc_attributes' outcaslib='public' replace;
 	run;
 	
@@ -854,7 +879,7 @@ run;
 				t2.A_DELIVERY_id as delivery_id,
 				t2.A_DRIVE_THRU_id as drive_thru_id,
 				t2.A_MCCAFE_TYPE_id as mccafe_type_id,
-/* 				t2.A_PRICE_LEVEL_id as price_level_id, */
+				t2.A_PRICE_LEVEL_id as price_level_id,
 				t2.A_WINDOW_TYPE_id as window_type_id
 			from
 				public.na_abt5 as t1
@@ -918,8 +943,8 @@ run;
 	
 	/* загружаем в cas */
 	data public.russia_weekend;
-	set nac.russia_weekend;
-	weekend_flag=1;
+		set nac.russia_weekend;
+		weekend_flag=1;
 	run;
 	
 	/* транспонируем russia_weekend */
@@ -988,7 +1013,6 @@ run;
 				coalesce(t3.International_Womens_Day, 0) as International_Womens_Day,
 				coalesce(t3.Labour_Day, 0) as Labour_Day,
 				coalesce(t3.National_Day, 0) as National_Day,
-				coalesce(t3.New_Year_shift, 0) as New_Year_shift, 
  				coalesce(t3.New_year, 0) as New_year,
 				coalesce(t3.Victory_Day, 0) as Victory_Day		 
 			from
@@ -1025,8 +1049,7 @@ run;
 	proc casutil;
 		load data=etl_ia.pbo_sales(
 			where=(
-				&ETL_CURRENT_DTTM. <= valid_to_dttm and
-				&ETL_CURRENT_DTTM. >= valid_from_dttm and
+				(year(valid_to_dttm) = 5999) and
 				(sales_dt <= '1mar2020'd or sales_dt >= '1jul2020'd)
 			)
 		) casout='ia_pbo_sales_history' outcaslib='public' replace;
@@ -1040,7 +1063,8 @@ run;
 				t1.pbo_location_id,
 				t1.START_DT,
 				t1.CHANNEL_CD,
-				mean(t2.receipt_qty) as mean_receipt_qty
+				mean(t2.receipt_qty) as mean_receipt_qty,
+				std(t2.receipt_qty) as std_receipt_qty
 			from
 				public.promo_skelet as t1
 			inner join
@@ -1083,7 +1107,7 @@ run;
 				t1.pbo_location_id,
 				t1.year,
 				t1.month,
-				t1.weekday			
+				t1.weekday	
 		;
 	quit;
 	
@@ -1128,8 +1152,8 @@ run;
 		create table public.na_abt8{options replace=true} as
 			select
 				t1.*,
-				coalesce(t2.mean_receipt_qty, t4.mean_receipt_qty, t3.mean_receipt_qty) as mean_receipt_qty,
-				coalesce(t2.std_receipt_qty, t3.std_receipt_qty) as std_receipt_qty	
+				coalesce(t2.mean_receipt_qty, t3.mean_receipt_qty, t4.mean_receipt_qty, t5.mean_receipt_qty, t6.mean_receipt_qty) as mean_receipt_qty,
+				coalesce(t2.std_receipt_qty, t3.std_receipt_qty, t4.std_receipt_qty, t5.std_receipt_qty, t6.std_receipt_qty) as std_receipt_qty	
 			from
 				public.na_abt7 as t1
 			left join
@@ -1145,11 +1169,24 @@ run;
 				t1.month = t2.month and
 				t1.weekday = t2.weekday
 			left join
-				public.gc_aggr_dump as t3
+				public.gc_aggr_smart as t3
 			on
-				(t1.year - 1) = t3.year and
+				(t1.year - 2) = t3.year and
+				t1.pbo_location_id = t3.pbo_location_id and
 				t1.month = t3.month and
 				t1.weekday = t3.weekday
+			left join
+				public.gc_aggr_dump as t5
+			on
+				(t1.year - 1) = t5.year and
+				t1.month = t5.month and
+				t1.weekday = t5.weekday
+			left join
+				public.gc_aggr_dump as t6
+			on
+				(t1.year - 2) = t6.year and
+				t1.month = t6.month and
+				t1.weekday = t6.weekday	
 		;
 	quit;
 
@@ -1190,8 +1227,7 @@ run;
 					from
 						etl_ia.pmix_sales
 					where
-						&ETL_CURRENT_DTTM. <= valid_to_dttm and
-						&ETL_CURRENT_DTTM. >= valid_from_dttm and
+						(year(valid_to_dttm) = 5999) and
 						channel_cd = 'ALL'
 				) as t1
 				inner join
@@ -1225,7 +1261,7 @@ run;
 	proc fedsql sessref=casauto;
 		create table public.promo_ml{options replace = true} as 
 			select
-				t1.PROMO_ID,
+				t1.hybrid_promo_id,
 				t1.start_dt,
 				t1.end_dt,
 				t3.option_number,
@@ -1242,8 +1278,6 @@ run;
 				public.ia_promo_x_product_leaf as t3
 			on
 				t1.PROMO_ID = t3.PROMO_ID
-			where
-				&filter.
 		;
 	quit;
 	
@@ -1251,7 +1285,7 @@ run;
 	proc fedsql sessref=casauto;
 		create table public.promo_ml2{options replace = true} as 
 			select distinct
-				t1.PROMO_ID,
+				t1.hybrid_promo_id,
 				t1.start_dt,
 				t1.option_number,
 				t2.PROD_LVL4_ID,
@@ -1269,7 +1303,7 @@ run;
 	proc fedsql sessref=casauto;
 		create table public.promo_ml3{options replace = true} as 
 			select
-				t1.promo_id,
+				t1.hybrid_promo_id,
 				t1.pbo_location_id,
 				t1.start_dt,
 				t1.option_number,
@@ -1283,7 +1317,7 @@ run;
 				t1.PROD_LVL4_ID = t2.PROD_LVL4_ID and
 				t1.pbo_location_id = t2.pbo_location_id
 			group by
-				t1.promo_id,
+				t1.hybrid_promo_id,
 				t1.pbo_location_id,
 				t1.start_dt,
 				t1.option_number,
@@ -1295,15 +1329,17 @@ run;
 	proc fedsql sessref=casauto;
 		create table public.promo_ml4{options replace = true} as 
 			select
-				t1.promo_id,
+				t1.hybrid_promo_id,
 				t1.pbo_location_id,
 				t1.start_dt,
 				t1.sales_dt,
 				min(t1.mean_sales_qty) as mean_sales_qty
 			from
 				public.promo_ml3 as t1
+			where
+				(sales_dt <= date'2020-03-01' or sales_dt >= date'2020-07-01') /* убираем ковид период */
 			group by
-				t1.promo_id,
+				t1.hybrid_promo_id,
 				t1.pbo_location_id,
 				t1.start_dt,
 				t1.sales_dt			
@@ -1315,7 +1351,7 @@ run;
 	proc fedsql sessref=casauto;
 		create table public.pmix_aggr_smart{options replace=true} as
 			select
-				t1.promo_id,
+				t1.hybrid_promo_id,
 				t1.pbo_location_id,
 				t1.year,
 				t1.month,
@@ -1324,7 +1360,7 @@ run;
 				std(t1.mean_sales_qty) as std_sales_qty
 			from (
 				select
-					t1.promo_id,
+					t1.hybrid_promo_id,
 					t1.pbo_location_id,
 					year(t1.sales_dt) as year,
 					month(t1.sales_dt) as month,
@@ -1334,7 +1370,7 @@ run;
 					public.promo_ml4 as t1
 			) as t1
 			group by
-				t1.promo_id,
+				t1.hybrid_promo_id,
 				t1.pbo_location_id,
 				t1.year,
 				t1.month,
@@ -1346,7 +1382,7 @@ run;
 	proc fedsql sessref=casauto;
 		create table public.pmix_aggr_dump{options replace=true} as
 			select
-				t1.promo_id,
+				t1.hybrid_promo_id,
 				t1.year,
 				t1.month,
 				t1.weekday,
@@ -1354,7 +1390,7 @@ run;
 				std(t1.mean_sales_qty) as std_sales_qty
 			from (
 				select
-					t1.promo_id,
+					t1.hybrid_promo_id,
 					year(t1.sales_dt) as year,
 					month(t1.sales_dt) as month,
 					weekday(t1.sales_dt) as weekday,
@@ -1363,7 +1399,7 @@ run;
 					public.promo_ml4 as t1
 			) as t1
 			group by
-				t1.promo_id,
+				t1.hybrid_promo_id,
 				t1.year,
 				t1.month,
 				t1.weekday
@@ -1378,7 +1414,7 @@ run;
 	proc fedsql sessref=casauto;
 		create table public.pmix_basic_aggr_smart{options replace=true} as
 			select
-				t1.promo_id,
+				t1.hybrid_promo_id,
 				t1.pbo_location_id,
 				mean(t1.mean_sales_qty) as mean_sales_qty,
 				std(t1.mean_sales_qty) as std_sales_qty
@@ -1387,7 +1423,7 @@ run;
 			where
 				sales_dt < start_dt
 			group by
-				t1.promo_id,
+				t1.hybrid_promo_id,
 				t1.pbo_location_id
 		;
 	quit;
@@ -1399,7 +1435,7 @@ run;
 	proc fedsql sessref=casauto;
 		create table public.pmix_basic_aggr_dump{options replace=true} as
 			select
-				t1.promo_id,
+				t1.hybrid_promo_id,
 				mean(t1.mean_sales_qty) as mean_sales_qty,
 				std(t1.mean_sales_qty) as std_sales_qty
 			from 
@@ -1407,7 +1443,7 @@ run;
 			where
 				sales_dt < start_dt
 			group by
-				t1.promo_id
+				t1.hybrid_promo_id
 		;
 	quit;
 	
@@ -1416,14 +1452,14 @@ run;
 		create table public.na_abt9{options replace=true} as
 			select
 				t1.*,
-				coalesce(t2.mean_sales_qty, t3.mean_sales_qty, t4.mean_sales_qty, t5.mean_sales_qty) as mean_sales_qty,
-				coalesce(t2.std_sales_qty, t3.std_sales_qty, t4.std_sales_qty, t5.std_sales_qty) as std_sales_qty
+				coalesce(t2.mean_sales_qty, t4.mean_sales_qty, t6.mean_sales_qty, t3.mean_sales_qty, t7.mean_sales_qty,  t5.mean_sales_qty) as mean_sales_qty,
+				coalesce(t2.std_sales_qty, t4.std_sales_qty, t6.std_sales_qty, t3.std_sales_qty, t7.std_sales_qty, t5.std_sales_qty) as std_sales_qty
 			from
 				public.na_abt8 as t1
 			left join
 				public.pmix_aggr_smart as t2
 			on
-				t1.promo_id = t2.promo_id and
+				t1.hybrid_promo_id = t2.hybrid_promo_id and
 				(t1.year - 1) = t2.year and
 				t1.pbo_location_id = t2.pbo_location_id and
 				t1.month = t2.month and
@@ -1431,19 +1467,36 @@ run;
 			left join
 				public.pmix_aggr_dump as t3
 			on
-				t1.promo_id = t3.promo_id and
+				t1.hybrid_promo_id = t3.hybrid_promo_id and
 				(t1.year - 1) = t3.year and
 				t1.month = t3.month and
 				t1.weekday = t3.weekday
 			left join
 				public.pmix_basic_aggr_smart as t4
 			on
-				t1.promo_id = t4.promo_id and
+				t1.hybrid_promo_id = t4.hybrid_promo_id and
 				t1.pbo_location_id = t4.pbo_location_id
 			left join
 				public.pmix_basic_aggr_dump as t5
 			on
-				t1.promo_id = t5.promo_id	
+				t1.hybrid_promo_id = t5.hybrid_promo_id	
+
+			left join
+				public.pmix_aggr_smart as t6
+			on
+				t1.hybrid_promo_id = t6.hybrid_promo_id and
+				(t1.year - 2) = t6.year and
+				t1.pbo_location_id = t6.pbo_location_id and
+				t1.month = t6.month and
+				t1.weekday = t6.weekday
+
+			left join
+				public.pmix_aggr_dump as t7
+			on
+				t1.hybrid_promo_id = t7.hybrid_promo_id and
+				(t1.year - 2) = t7.year and
+				t1.month = t7.month and
+				t1.weekday = t7.weekday
 		;
 	quit;
 
@@ -1470,13 +1523,13 @@ run;
 	proc sql;
 		create table work.na_calculation_result as
 			select
-				t1.promo_id,
+				t1.hybrid_promo_id,
 				t2.pbo_location_id,
 				t1.sales_dt,
 				t1.n_a,
 				t1.t_a
 			from
-				nac.na_calculation_result as t1
+				&na_history_table. as t1
 			inner join (
 				select distinct
 					PBO_LOCATION_ID,
@@ -1485,8 +1538,7 @@ run;
 					etl_ia.pbo_loc_attributes
 				where
 					PBO_LOC_ATTR_NM='STORE_ID' and
-					&ETL_CURRENT_DTTM. <= valid_to_dttm and
-					&ETL_CURRENT_DTTM. >= valid_from_dttm
+					(year(valid_to_dttm) = 5999)
 			) as t2
 			on
 				t1.PBO_LOCATION_ID = t2.store_id
@@ -1508,9 +1560,9 @@ run;
 			from
 				public.na_abt9 as t1
 			inner join
-				(select distinct promo_id from public.na_calculation_result) as t2
+				(select distinct hybrid_promo_id from public.na_calculation_result) as t2
 			on
-				t1.promo_id = t2.promo_id
+				t1.hybrid_promo_id = t2.hybrid_promo_id
 				/* 
 					Если акцию не обсчитывали в чеках, то нет смысла
 					добавлять ее в обучающую выборку 
@@ -1518,7 +1570,7 @@ run;
 			left join
 				public.na_calculation_result as t3
 			on
-				t1.promo_id = t3.promo_id and
+				t1.hybrid_promo_id = t3.hybrid_promo_id and
 				t1.pbo_location_id = t3.pbo_location_id and
 				t1.sales_dt = t3.sales_dt
 		;
@@ -1549,10 +1601,7 @@ run;
 	/* Загружаем таблицу с временными закрытиями */
 	proc casutil;
 		load data=etl_ia.pbo_close_period(
-			where=(
-				&ETL_CURRENT_DTTM. <= valid_to_dttm and
-				&ETL_CURRENT_DTTM. >= valid_from_dttm
-			)
+			where=(year(valid_to_dttm) = 5999)
 		) casout='pbo_close_period' outcaslib='public' replace;	
 	run;
 
@@ -1594,28 +1643,28 @@ run;
 	proc fedsql sessref=casauto;
 		create table public.promo_pbo_miss{options replace=true} as
 			select
-				t1.promo_id,
+				t1.hybrid_promo_id,
 				t1.pbo_location_id
 			from (
 				select
-					promo_id,
+					hybrid_promo_id,
 					pbo_location_id,
 					nmiss(n_a) as nmiss
 				from
 					public.na_abt10
 				group by
-					promo_id,
+					hybrid_promo_id,
 					pbo_location_id
 			) as t1
 			inner join (
 				select
-					promo_id,
+					hybrid_promo_id,
 					(end_dt - start_dt + 1) as len
 				from
 					casuser.past_promo
 			) as t2
 			on
-				t1.promo_id = t2.promo_id
+				t1.hybrid_promo_id = t2.hybrid_promo_id
 			where
 				t1.nmiss = t2.len
 		;	
@@ -1631,10 +1680,10 @@ run;
 			left join
 				public.promo_pbo_miss as t2
 			on
-				t1.promo_id= t2.promo_id and
+				t1.hybrid_promo_id= t2.hybrid_promo_id and
 				t1.pbo_location_id = t2.pbo_location_id
 			where
-				t2.promo_id is missing
+				t2.hybrid_promo_id is missing
 		;	
 	quit;
 
@@ -1656,7 +1705,7 @@ run;
 		/* Определяем концы интрвала */
 		create table public.ts_edges{option replace=true} as
 			select
-				promo_id,
+				hybrid_promo_id,
 				pbo_location_id,
 				min(sales_dt) as left_side,
 				max(sales_dt) as right_side
@@ -1665,7 +1714,7 @@ run;
 			where
 				n_a is not missing
 			group by
-				promo_id,
+				hybrid_promo_id,
 				pbo_location_id
 
 		;
@@ -1678,7 +1727,7 @@ run;
 			inner join
 				public.ts_edges as t2
 			on
-				t1.promo_id = t2.promo_id and
+				t1.hybrid_promo_id = t2.hybrid_promo_id and
 				t1.pbo_location_id = t2.pbo_location_id
 			where
 				t1.sales_dt <= t2.right_side and
@@ -1706,7 +1755,7 @@ run;
 		/* Читаем среднее и стандартное отклонение */
 		create table public.na_stat{option replace=true} as
 			select
-				promo_id,
+				hybrid_promo_id,
 				pbo_location_id,
 				mean(t_a) as mean_t_a,
 				mean(n_a) as mean_n_a,
@@ -1714,7 +1763,7 @@ run;
 			from
 				public.na_abt13
 			group by
-				promo_id,
+				hybrid_promo_id,
 				pbo_location_id
 		;
 		/* Заменяем на миссинги выбросы */
@@ -1727,7 +1776,7 @@ run;
 				PROMO_GROUP_ID, 
 				sales_dt, 
 				PROMO_MECHANICS_NAME, 
-				t1.PROMO_ID, 
+				t1.hybrid_PROMO_ID, 
 				WEEK_START, 
 				NUMBER_OF_OPTIONS, 
 				NUMBER_OF_PRODUCTS, 
@@ -1758,7 +1807,7 @@ run;
 				DELIVERY_ID, 
 				DRIVE_THRU_ID, 
 				MCCAFE_TYPE_ID, 
-/* 				PRICE_LEVEL_ID,  */
+				PRICE_LEVEL_ID, 
 				WINDOW_TYPE_ID, 
 				week, 
 				weekday, 
@@ -1774,7 +1823,6 @@ run;
 				INTERNATIONAL_WOMENS_DAY, 
 				LABOUR_DAY, 
 				NATIONAL_DAY, 
-				NEW_YEAR_SHIFT, 
 				NEW_YEAR, 
 				VICTORY_DAY, 
 				MEAN_RECEIPT_QTY, 
@@ -1794,7 +1842,7 @@ run;
 			inner join
 				public.na_stat as t2
 			on
-				t1.promo_id = t2.promo_id and
+				t1.hybrid_promo_id = t2.hybrid_promo_id and
 				t1.pbo_location_id = t2.pbo_location_id
 		;
 	quit;
@@ -1822,7 +1870,7 @@ run;
 				PROMO_GROUP_ID, 
 				sales_dt, 
 				PROMO_MECHANICS_NAME, 
-				t1.PROMO_ID, 
+				t1.hybrid_PROMO_ID, 
 				WEEK_START, 
 				NUMBER_OF_OPTIONS, 
 				NUMBER_OF_PRODUCTS, 
@@ -1853,7 +1901,7 @@ run;
 				DELIVERY_ID, 
 				DRIVE_THRU_ID, 
 				MCCAFE_TYPE_ID, 
-/* 				PRICE_LEVEL_ID,  */
+				PRICE_LEVEL_ID, 
 				WINDOW_TYPE_ID, 
 				week, 
 				weekday, 
@@ -1869,7 +1917,6 @@ run;
 				INTERNATIONAL_WOMENS_DAY, 
 				LABOUR_DAY, 
 				NATIONAL_DAY, 
-				NEW_YEAR_SHIFT, 
 				NEW_YEAR, 
 				VICTORY_DAY, 
 				MEAN_RECEIPT_QTY, 
@@ -1891,7 +1938,7 @@ run;
 			inner join
 				public.na_stat as t2
 			on
-				t1.promo_id = t2.promo_id and
+				t1.hybrid_promo_id = t2.hybrid_promo_id and
 				t1.pbo_location_id = t2.pbo_location_id
 		;
 	quit;
@@ -1927,7 +1974,7 @@ run;
 	proc fedsql sessref=casauto;
 		create table casuser.mean_target_variable_pbo{option replace=true} as
 			select
-				t1.promo_id,
+				t1.hybrid_promo_id,
 				t1.promo_mechanics_name,
 				t1.pbo_location_id,
 				t2.start_dt,
@@ -1939,7 +1986,7 @@ run;
 				public.na_abt15 as t1
 			inner join (
 				select distinct
-					PROMO_ID,
+					hybrid_PROMO_ID,
 					start_dt,
 					end_dt,
 					pbo_location_id
@@ -1948,9 +1995,9 @@ run;
 			) as t2
 			on
 				t1.pbo_location_id = t2.pbo_location_id and
-				t1.promo_id = t2.promo_id
+				t1.hybrid_promo_id = t2.hybrid_promo_id
 			group by
-				t1.promo_id,
+				t1.hybrid_promo_id,
 				t1.promo_mechanics_name,
 				t1.pbo_location_id,
 				t2.start_dt,
@@ -1962,7 +2009,7 @@ run;
 	proc fedsql sessref=casauto;
 		create table casuser.mean_target_variable{option replace=true} as
 			select
-				t1.promo_id,
+				t1.hybrid_promo_id,
 				t1.promo_mechanics_name,
 				t2.start_dt,
 				t2.end_dt,
@@ -1973,16 +2020,16 @@ run;
 				public.na_abt15 as t1
 			inner join (
 				select distinct
-					PROMO_ID,
+					hybrid_PROMO_ID,
 					start_dt,
 					end_dt
 				from
 					public.promo_ml
 			) as t2
 			on
-				t1.promo_id = t2.promo_id
+				t1.hybrid_promo_id = t2.hybrid_promo_id
 			group by
-				t1.promo_id,
+				t1.hybrid_promo_id,
 				t1.promo_mechanics_name,
 				t2.start_dt,
 				t2.end_dt
@@ -2023,7 +2070,7 @@ run;
 	proc fedsql sessref=casauto;
 		create table casuser.target_aggr_pbo{option replace=true} as
 			select
-				t1.promo_id,
+				t1.hybrid_promo_id,
 				t1.promo_mechanics_name,
 				t1.pbo_location_id,
 				divide(sum(t2.sum_n_a), sum(t2.count_promo_days)) as mean_past_n_a,
@@ -2037,7 +2084,7 @@ run;
 				t1.promo_mechanics_name = t2.promo_mechanics_name and
 				t1.start_dt >= t2.end_dt
 			group by
-				t1.promo_id,
+				t1.hybrid_promo_id,
 				t1.promo_mechanics_name,
 				t1.pbo_location_id
 		;
@@ -2047,7 +2094,7 @@ run;
 	proc fedsql sessref=casauto;
 		create table casuser.target_aggr{option replace=true} as
 			select
-				t1.promo_id,
+				t1.hybrid_promo_id,
 				t1.promo_mechanics_name,
 				divide(sum(t2.sum_n_a), sum(t2.count_promo_days)) as mean_past_n_a,
 				divide(sum(t2.sum_t_a), sum(t2.count_promo_days)) as mean_past_t_a
@@ -2059,7 +2106,7 @@ run;
 				t1.promo_mechanics_name = t2.promo_mechanics_name and
 				t1.start_dt >= t2.end_dt
 			group by
-				t1.promo_id,
+				t1.hybrid_promo_id,
 				t1.promo_mechanics_name
 		;
 	quit;
@@ -2076,13 +2123,12 @@ run;
 			left join
 				casuser.target_aggr_pbo as t2
 			on
-				t1.promo_id = t2.promo_id and
+				t1.hybrid_promo_id = t2.hybrid_promo_id and
 				t1.pbo_location_id = t2.pbo_location_id
 			left join
 				casuser.target_aggr as t3
 			on
-				t1.promo_id = t3.promo_id
-
+				t1.hybrid_promo_id = t3.hybrid_promo_id
 		;	
 	quit;
 
@@ -2120,10 +2166,7 @@ run;
 	/* Загружаем таблицу с погодой */
 	proc casutil;
 		load data=etl_ia.weather(
-			where=(
-				&ETL_CURRENT_DTTM. <= valid_to_dttm and
-				&ETL_CURRENT_DTTM. >= valid_from_dttm
-			)
+			where=(year(valid_to_dttm) = 5999)
 		) casout='ia_weather' outcaslib='casuser' replace;	
 	run;
 	

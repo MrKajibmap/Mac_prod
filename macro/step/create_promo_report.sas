@@ -31,19 +31,13 @@
 	proc fedsql sessref=casauto;
 		create table casuser.promo_report_view{options replace=true} as 
 		select 
-			pr.promo_id,
-			pr.promo_nm,
-			pr.promo_rk,
-			pr.promo_start_dttm,
-			pr.promo_end_dttm,
-			pr.promo_status_cd,
-			pr.creation_dttm
-			,prod_nm.promo_dtl_vle as product_nm
-			/* ,prod.member_rk as product_rk */
-			,io.member_nm as int_org_nm
-			,io.member_rk as int_org_rk
-			,seg.member_nm as segment_nm
-			,ch.member_nm as channel
+			pr.promo_id
+			,pr.promo_nm
+			,pr.promo_rk
+			,pr.promo_start_dttm
+			,pr.promo_end_dttm
+			,pr.promo_status_cd
+			,pr.creation_dttm
 			,pdmt.promo_dtl_vle as mechanicsType
 			,pdpl.promo_dtl_vle as platform
 			,pdspl.promo_dtl_vle as subPlatform
@@ -54,21 +48,6 @@
 			,pdmrkstooh.promo_dtl_vle as marketingOoh
 			,pdmrksttrp.promo_dtl_vle as marketingTrp
 		from casuser.promo pr
-			left join casuser.promo_x_dim_point pxdp
-				on pxdp.promo_rk = pr.promo_rk
-			left join casuser.dim_point dp
-				on dp.dim_point_rk = pxdp.dim_point_rk
-			left join casuser.promo_detail prod_nm
-				on pr.promo_rk = prod_nm.promo_rk
-				and prod_nm.promo_dtl_cd like 'mechPromoSkuTitle_%'
-				and prod_nm.promo_dtl_cd not like 'null'
-			left join casuser.internal_org io
-				on dp.int_org_rk = io.member_rk
-				and io.member_nm <> 'All PBO'
-			left join casuser.segment seg
-				on dp.segment_rk = seg.member_rk
-			left join casuser.channel ch
-				on dp.channel_rk = ch.member_rk
 			left join casuser.promo_detail pdmt
 				on pr.promo_rk = pdmt.promo_rk
 				and pdmt.promo_dtl_cd = 'mechanicsType'
@@ -95,7 +74,8 @@
 				and pdmrkstooh.promo_dtl_cd = 'marketingOoh'
 			left join casuser.promo_detail pdmrksttrp
 				on pr.promo_rk = pdmrksttrp.promo_rk
-				and pdmrksttrp.promo_dtl_cd = 'marketingTrp'		
+				and pdmrksttrp.promo_dtl_cd = 'marketingTrp'	
+			
 		;
 	quit;
 
@@ -104,25 +84,34 @@
 	proc fedsql sessref=casauto;
 		create table casuser.PROMO_LIST_REPORT{options replace=true} as 
 		SELECT DISTINCT
-			 promo_id
-			,promo_nm
-			,promo_rk
-			,promo_start_dttm
-			,promo_end_dttm
-			,promo_status_cd
-			,creation_dttm
-			,segment_nm
-			,channel
-			,mechanicsType
-			,platform
-			,subPlatform
-			,benefit
-			,benefitVal
-			,marketingDigital
-			,marketingInStore
-			,marketingOoh
-			,marketingTrp
-		FROM casuser.promo_report_view
+			 pr.promo_id
+			,pr.promo_nm
+			,pr.promo_rk
+			,pr.promo_start_dttm
+			,pr.promo_end_dttm
+			,pr.promo_status_cd
+			,pr.creation_dttm
+			,seg.member_nm as segment_nm
+			,ch.member_nm as channel
+			,pr.mechanicsType
+			,pr.platform
+			,pr.subPlatform
+			,pr.benefit
+			,pr.benefitVal
+			,pr.marketingDigital
+			,pr.marketingInStore
+			,pr.marketingOoh
+			,pr.marketingTrp
+
+		FROM casuser.promo_report_view pr
+			left join casuser.promo_x_dim_point pxdp
+					on pxdp.promo_rk = pr.promo_rk
+			left join casuser.dim_point dp
+				on dp.dim_point_rk = pxdp.dim_point_rk
+			left join casuser.segment seg
+				on dp.segment_rk = seg.member_rk
+			left join casuser.channel ch
+				on dp.channel_rk = ch.member_rk
 		;
 	quit;
 
@@ -132,19 +121,38 @@
 	proc fedsql sessref=casauto;
 		create table casuser.ORG_PROMO_LIST_REPORT{options replace=true} as 
 		SELECT DISTINCT
-			 promo_rk
-			,int_org_nm
-			,int_org_rk
-		FROM casuser.promo_report_view;
+			 pr.promo_rk
+			 ,io.member_nm as int_org_nm
+			 ,io.member_rk as int_org_rk
+		FROM casuser.promo_report_view pr
+		left join casuser.promo_x_dim_point pxdp
+				on pxdp.promo_rk = pr.promo_rk
+		left join casuser.dim_point dp
+			on dp.dim_point_rk = pxdp.dim_point_rk
+		left join casuser.internal_org io
+			on dp.int_org_rk = io.member_rk
+			and io.member_nm <> 'All PBO';
 	quit;
 
 	/* Таблица №3 - отдельно список продуктов для каждой акции (тоже самое для промо+продукты)*/
+		/* Таблица №3 - отдельно список продуктов для каждой акции (тоже самое для промо+продукты)*/
 	proc fedsql sessref=casauto;
 		create table casuser.PRODUCT_PROMO_LIST_REPORT{options replace=true} as 
 		SELECT DISTINCT
-			 promo_rk
-			,product_nm
-		FROM casuser.promo_report_view;
+			 pr.promo_rk
+			 ,prod_nm.promo_dtl_vle as product_nm
+			 ,coalesce(pdpos.promo_dtl_vle,'0') as mech_position
+		FROM casuser.promo_report_view pr
+			left join casuser.promo_detail prod_nm
+					on pr.promo_rk = prod_nm.promo_rk
+					and prod_nm.promo_dtl_cd like 'mechPromoSkuTitle_%'
+					and prod_nm.promo_dtl_cd not like 'null'
+			left join casuser.promo_detail pdpos
+					on pr.promo_rk = pdpos.promo_rk
+					and pdpos.promo_dtl_cd like 'mechPosition%'	
+					and substr(prod_nm.promo_dtl_cd,19,3) = substr(pdpos.promo_dtl_cd,14,3) 
+					and pdpos.promo_dtl_cd not like 'null'
+	;	
 	quit;
 	
 	proc casutil;

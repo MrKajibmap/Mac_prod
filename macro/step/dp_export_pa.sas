@@ -60,7 +60,7 @@
 	%let lmvOutTable = &mpOutTable.;
 	%member_names (mpTable=&lmvOutTable, mpLibrefNameKey=lmvOutLibrefNm, mpMemberNameKey=lmvOutTabNameNm); 
 			
-	%let lmvApiUrl = 10.252.151.3;
+	%let lmvApiUrl = 10.252.151.9;
 	%let lmvPlanAreaNm = &mpPlanAreaNm.;
 	%let lmvOutTable = &mpOutTable.;
 	%let lmvMode = %upcase(&mpMode.);

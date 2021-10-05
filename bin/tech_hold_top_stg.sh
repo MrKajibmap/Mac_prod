@@ -1,0 +1,1 @@
+/opt/sas/mcd_config/bin/start_sas.sh /opt/sas/mcd_config/macro/job/tech_004_hold_top_stg.sas tech

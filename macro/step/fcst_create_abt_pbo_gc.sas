@@ -951,6 +951,7 @@
 				   THEN (COALESCE(t1.AVG_of_Detrend_sm_multi_WBY, t4.AVG_of_AVG_of_Detrend_sm_multi, t6.AVG_of_AVG_of_Detrend_sm_multi))
 				   ELSE (COALESCE(t1.AVG_of_Detrend_sm_multi, t3.AVG_of_AVG_of_Detrend_sm_multi, t5.AVG_of_AVG_of_Detrend_sm_multi))
 				END)) AS Deseason_sm_multi
+
 		FROM 
 			casuser.MA364_DETREND_DESEASON_JOINT t1
 		/* Добавляем COVID-pattern и TRP */

@@ -150,7 +150,7 @@
 	proc casutil;
 		droptable casdata="price_full_sku_pbo_day" incaslib="mn_dict" quiet;
 		promote casdata="price_full_sku_pbo_day" incaslib="casuser" casout="price_full_sku_pbo_day" outcaslib="mn_dict";
-		save incaslib="mn_dict" outcaslib="mn_dict" casdata="price_full_sku_pbo_day" casout="PRICE_FULL_SKU_PBO_DAY.sashdat" replace; 
+		save incaslib="mn_dict" outcaslib="mn_dict" casdata="price_full_sku_pbo_day" casout="price_full_sku_pbo_day.sashdat" replace; 
 		droptable casdata="price_full_sku_pbo_day" incaslib="mn_dict" quiet;
 	run;
 %mend price_unfold;

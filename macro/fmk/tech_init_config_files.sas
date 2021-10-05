@@ -58,9 +58,9 @@
 			  firstobs = 2
 			  encoding = "utf8"; 
 	   ; 
-	   attrib resource_nm length = $32
-		  format = $32.
-		  informat = $32.;  
+	   attrib resource_nm length = $40
+		  format = $40.
+		  informat = $40.;  
 		  
 		  
 	   attrib resource_type_load length = $32
@@ -93,9 +93,9 @@
 	   ; 
 	   attrib rule_id length = 8;
 		  
-	   attrib rule_nm length = $32
-		  format = $32.
-		  informat = $32.;  
+	   attrib rule_nm length = $40
+		  format = $40.
+		  informat = $40.;  
 		  
 	   attrib rule_desc length = $256
 		  format = $256.

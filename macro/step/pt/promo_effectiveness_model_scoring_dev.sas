@@ -536,7 +536,6 @@ Undefined
 				coalesce(t3.International_Womens_Day, 0) as International_Womens_Day,
 				coalesce(t3.Labour_Day, 0) as Labour_Day,
 				coalesce(t3.National_Day, 0) as National_Day,
-				coalesce(t3.New_Year_shift, 0) as New_Year_shift, 
  				coalesce(t3.New_year, 0) as New_year,
 				coalesce(t3.Victory_Day, 0) as Victory_Day		 
 			from
@@ -918,7 +917,6 @@ Undefined
 				t1.INTERNATIONAL_WOMENS_DAY,
 				t1.LABOUR_DAY,
 				t1.NATIONAL_DAY,
-				t1.NEW_YEAR_SHIFT,
 				t1.NEW_YEAR,
 				t1.VICTORY_DAY,
 				t1.MEAN_RECEIPT_QTY,
@@ -1182,7 +1180,6 @@ Undefined
 				t1.INTERNATIONAL_WOMENS_DAY,
 				t1.LABOUR_DAY,
 				t1.NATIONAL_DAY,
-				t1.NEW_YEAR_SHIFT,
 				t1.NEW_YEAR,
 				t1.VICTORY_DAY,
 				t1.MEAN_RECEIPT_QTY,
